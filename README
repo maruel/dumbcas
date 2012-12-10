@@ -1,7 +1,0 @@
-Simple Content-Addressed-Datastore.
-
-In the likes of camlistore but really, really simple.
-
-The idea is that you can rsync the data around without problem. To be used as a
-backup solution that is faster than raw rsync (supports file rename/move
-efficiently) but permits deleting old backups unlike bup.

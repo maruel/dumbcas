@@ -22,6 +22,7 @@ import (
 
 const casName = "cas"
 const needFsckName = "need_fsck"
+const hashLength = 40
 
 // Creates 16^3 (4096) directories. Preferable values are 2 or 3.
 const splitAt = 3
@@ -83,7 +84,7 @@ func MakeCasTable(rootDir string) (*CasTable, error) {
 		rootDir,
 		casDir,
 		prefixLength,
-		regexp.MustCompile("^([a-f0-9]{40})$"),
+		regexp.MustCompile(fmt.Sprintf("^([a-f0-9]{%d})$", hashLength)),
 	}, nil
 }
 
@@ -111,7 +112,7 @@ type Item struct {
 // Enumerates all the entries in the CAS.
 func (c *CasTable) Enumerate(items chan<- Item) {
 	rePrefix := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", c.prefixLength))
-	reRest := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", 40-c.prefixLength))
+	reRest := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", hashLength-c.prefixLength))
 
 	// TODO(maruel): No need to read all at once.
 	prefixes, err := readDirNames(c.casDir)

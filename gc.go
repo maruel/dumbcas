@@ -27,10 +27,8 @@ func TagRecurse(entries map[string]bool, entry *Entry) {
 	if entry.Sha1 != "" {
 		entries[entry.Sha1] = true
 	}
-	if entry.Files != nil {
-		for _, i := range entry.Files {
-			TagRecurse(entries, i)
-		}
+	for _, i := range entry.Files {
+		TagRecurse(entries, i)
 	}
 }
 

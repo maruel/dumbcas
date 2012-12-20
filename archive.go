@@ -40,11 +40,9 @@ func (e *EntryCache) Print(w io.Writer, indent string) {
 		fmt.Fprintf(w, "%sSha1: %s\n", indent, e.Sha1)
 		fmt.Fprintf(w, "%sSize: %d\n", indent, e.Size)
 	}
-	if e.Files != nil {
-		for _, f := range e.SortedFiles() {
-			fmt.Fprintf(w, "%s- '%s'\n", indent, f)
-			e.Files[f].Print(w, indent+"  ")
-		}
+	for _, f := range e.SortedFiles() {
+		fmt.Fprintf(w, "%s- '%s'\n", indent, f)
+		e.Files[f].Print(w, indent+"  ")
 	}
 }
 
@@ -93,20 +91,16 @@ func RecursePath(cache *EntryCache, entry *Entry, itemPath string) (*EntryCache,
 
 func CountSizeCache(i *EntryCache) int {
 	countI := 1
-	if i.Files != nil {
-		for _, v := range i.Files {
-			countI += CountSizeCache(v)
-		}
+	for _, v := range i.Files {
+		countI += CountSizeCache(v)
 	}
 	return countI
 }
 
 func CountSize(i *Entry) int {
 	countI := 1
-	if i.Files != nil {
-		for _, v := range i.Files {
-			countI += CountSize(v)
-		}
+	for _, v := range i.Files {
+		countI += CountSize(v)
 	}
 	return countI
 }

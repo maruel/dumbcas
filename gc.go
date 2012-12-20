@@ -12,7 +12,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 	"path"
 )
 
@@ -79,12 +78,13 @@ func gcMain(name string) error {
 				cas.NeedFsck()
 				return fmt.Errorf("Failed reading %s", item.FullPath)
 			}
-			entryPath := cas.FilePath(node.Entry)
-			if entryPath == "" {
+			f, err := cas.Open(node.Entry)
+			if err != nil {
 				cas.NeedFsck()
 				return fmt.Errorf("Invalid entry name: %s", node.Entry)
 			}
-			if err := loadFileAsJson(entryPath, &entry); err != nil {
+			defer f.Close()
+			if err := loadReaderAsJson(f, &entry); err != nil {
 				cas.NeedFsck()
 				return fmt.Errorf("Failed reading entry %s", node.Entry)
 			}
@@ -106,12 +106,10 @@ func gcMain(name string) error {
 	}
 	log.Printf("Found %d orphan", len(orphans))
 	for _, orphan := range orphans {
-		orphanPath := cas.FilePath(orphan)
-		if orphanPath == "" {
+		if err := cas.Trash(orphan, trash); err != nil {
 			cas.NeedFsck()
-			return fmt.Errorf("Internal error while looking for %s", orphan)
+			return fmt.Errorf("Internal error while looking for %s: %s", orphan, err)
 		}
-		os.Remove(orphanPath)
 	}
 	return nil
 }

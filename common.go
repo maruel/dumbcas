@@ -42,7 +42,7 @@ func GetCommonFlags() flag.FlagSet {
 	return flags
 }
 
-func CommonFlag(createRoot bool, bypassFsck bool) (*CasTable, error) {
+func CommonFlag(createRoot bool, bypassFsck bool) (CasTable, error) {
 	if Root == "" {
 		return nil, errors.New("Must provide -root")
 	}
@@ -139,17 +139,21 @@ func readDirNames(dirPath string) ([]string, error) {
 	return f.Readdirnames(0)
 }
 
-func sha1File(filePath string) (string, error) {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
+func sha1File(f io.Reader) (string, error) {
 	hash := sha1.New()
 	if _, err := io.Copy(hash, f); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func sha1FilePath(filePath string) (string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	return sha1File(f)
 }
 
 func sha1Bytes(content []byte) string {

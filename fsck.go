@@ -41,16 +41,20 @@ func fsckMain() error {
 		item := <-c
 		if item.Item != "" {
 			count += 1
-			itemPath := cas.FilePath(item.Item)
-			actual, err := sha1File(itemPath)
+			f, err := cas.Open(item.Item)
+			if err != nil {
+				return fmt.Errorf("Failed to open %s: %s", item.Item, err)
+			}
+			defer f.Close()
+			actual, err := sha1File(f)
 			if err != nil {
 				// Probably Disk error.
-				return fmt.Errorf("Aborting! Failed to sha1 %s: %s", itemPath, err)
+				return fmt.Errorf("Aborting! Failed to sha1 %s: %s", item.Item, err)
 			}
 			if actual != item.Item {
 				corrupted += 1
 				log.Printf("Found invalid object, %s != %s", item.Item, actual)
-				if err := trash.Move(cas.RelPath(item.Item)); err != nil {
+				if err := cas.Trash(item.Item, trash); err != nil {
 					return fmt.Errorf("Failed to trash object %s: %s", item.Item, err)
 				}
 			}

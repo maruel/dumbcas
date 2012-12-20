@@ -124,7 +124,7 @@ func UpdateFile(cache *EntryCache, entry *Entry, item TreeItem) error {
 		return nil
 	}
 
-	digest, err := sha1File(item.FullPath)
+	digest, err := sha1FilePath(item.FullPath)
 	if err != nil {
 		return err
 	}
@@ -291,7 +291,7 @@ type Stats struct {
 	stdout     io.Writer
 }
 
-func (s *Stats) recurseTree(itemPath string, entry *Entry, cas *CasTable) error {
+func (s *Stats) recurseTree(itemPath string, entry *Entry, cas CasTable) error {
 	if Stop {
 		return errors.New("Ctrl-C'ed out")
 	}
@@ -323,7 +323,7 @@ func (s *Stats) recurseTree(itemPath string, entry *Entry, cas *CasTable) error 
 	return nil
 }
 
-func casArchive(stdout io.Writer, entries *Entry, cas *CasTable) (string, error) {
+func casArchive(stdout io.Writer, entries *Entry, cas CasTable) (string, error) {
 	log.Printf("casArchive(%d entries)\n", CountSize(entries))
 	root := ""
 	if filepath.Separator == '/' {

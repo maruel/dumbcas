@@ -11,7 +11,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -164,7 +163,7 @@ type entryCache struct {
 // Serves the NodesName directory and its virtual directory.
 type nodeFileSystem struct {
 	nodesDir string
-	cas      *CasTable
+	cas      CasTable
 	maxItems int
 
 	// Mutables
@@ -173,7 +172,7 @@ type nodeFileSystem struct {
 	recentEntries map[string]*entryCache
 }
 
-func makeNodeFileSystem(nodesDir string, cas *CasTable) http.Handler {
+func makeNodeFileSystem(nodesDir string, cas CasTable) http.Handler {
 	return &nodeFileSystem{
 		nodesDir:      nodesDir,
 		cas:           cas,
@@ -269,11 +268,12 @@ func (n *nodeFileSystem) getEntry(entryName string) (*entryCache, error) {
 
 	// Create a new entry without the lock.
 	entryObj := &entryCache{EntryFileSystem: EntryFileSystem{cas: n.cas}}
-	entryPath := n.cas.FilePath(entryName)
-	if entryPath == "" {
-		return nil, errors.New("Failed to load the entry file")
+	f, err := n.cas.Open(entryName)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to load the entry file: %s", err)
 	}
-	if err := loadFileAsJson(entryPath, &entryObj.entry); err != nil {
+	defer f.Close()
+	if err := loadReaderAsJson(f, &entryObj.entry); err != nil {
 		return nil, err
 	}
 	go n.updateEntryCache(entryName, entryObj)

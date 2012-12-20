@@ -61,7 +61,7 @@ func (e *Entry) isDir() bool {
 
 type EntryFileSystem struct {
 	entry *Entry
-	cas   *CasTable
+	cas   CasTable
 }
 
 // "itemPath" must be posix-style.

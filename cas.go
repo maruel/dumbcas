@@ -10,7 +10,9 @@ limitations under the License. */
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -54,7 +56,7 @@ func PrefixSpace(prefixLength uint) int {
 	if prefixLength == 0 {
 		return 0
 	}
-	return 1<<(prefixLength*4)
+	return 1 << (prefixLength * 4)
 }
 
 func MakeCasTable(rootDir string) (*CasTable, error) {
@@ -142,6 +144,28 @@ func (c *CasTable) Enumerate(items chan<- Item) {
 		}
 	}
 	items <- Item{}
+}
+
+// Adds an entry with the hash calculated already if not alreaady present. It's
+// a performance optimization to be able to not write the object unless needed.
+func (c *CasTable) AddEntry(source io.Reader, hash string) error {
+	dst := c.FilePath(hash)
+	df, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0640)
+	if os.IsExist(err) {
+		return err
+	}
+	if err != nil {
+		return fmt.Errorf("Failed to copy(dst) %s: %s", dst, err)
+	}
+	defer df.Close()
+	_, err = io.Copy(df, source)
+	return err
+}
+
+// Utility function when the data is already in memory but not yet hashed.
+func (c *CasTable) AddBytes(data []byte) (string, error) {
+	hash := sha1Bytes(data)
+	return hash, c.AddEntry(bytes.NewBuffer(data), hash)
 }
 
 // Signals that an fsck is required.

@@ -213,53 +213,6 @@ func readFileAsStrings(filepath string) ([]string, error) {
 	return lines, err
 }
 
-func WriteContentIfNotMatch(srcData []byte, dst string) error {
-	df, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE, 0640)
-	if err != nil {
-		return fmt.Errorf("Failed to write %s: %s", dst, err)
-	}
-	defer df.Close()
-	stat, err := df.Stat()
-	if err != nil {
-		return fmt.Errorf("Failed to stat %s: %s", dst, err)
-	}
-
-	// Note that a corrupted file could be silently kept. It's the job of fsck to
-	// delete them.
-	if stat.Size() != int64(len(srcData)) {
-		_, err = df.Write(srcData)
-	} else {
-		err = os.ErrExist
-	}
-	return err
-}
-
-func CopyFileIfNotMatch(src string, size int64, dst string) error {
-	sf, err := os.Open(src)
-	if err != nil {
-		return fmt.Errorf("Failed to copy(src) %s: %s", src, err)
-	}
-	defer sf.Close()
-	df, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE, 0640)
-	if err != nil {
-		return fmt.Errorf("Failed to copy(dst) %s: %s", dst, err)
-	}
-	defer df.Close()
-	stat, err := df.Stat()
-	if err != nil {
-		return fmt.Errorf("Failed to stat %s: %s", dst, err)
-	}
-
-	// Note that a corrupted file could be silently kept. It's the job of fsck
-	// to delete them.
-	if stat.Size() != size {
-		_, err = io.Copy(df, sf)
-	} else {
-		err = os.ErrExist
-	}
-	return err
-}
-
 // Calculates each entry. Assumes inputs is cleaned paths.
 func processWithCache(stdout io.Writer, inputs []string) (*Entry, error) {
 	log.Printf("processWithCache(%d)", len(inputs))
@@ -348,11 +301,13 @@ func (s *Stats) recurseTree(itemPath string, entry *Entry, cas *CasTable) error 
 		}
 	}
 	if entry.Sha1 != "" {
-		err := CopyFileIfNotMatch(
-			itemPath,
-			entry.Size,
-			cas.FilePath(entry.Sha1))
-		if err == os.ErrExist {
+		f, err := os.Open(itemPath)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+		err = cas.AddEntry(f, entry.Sha1)
+		if os.IsExist(err) {
 			s.nbSkipped += 1
 			s.skipped += entry.Size
 			err = nil
@@ -382,9 +337,8 @@ func casArchive(stdout io.Writer, entries *Entry, cas *CasTable) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("Failed to marshall entry file: %s\n", err)
 	}
-	entrySha1 := sha1Bytes(data)
-	err = WriteContentIfNotMatch(data, cas.FilePath(entrySha1))
-	if err == os.ErrExist {
+	entrySha1, err := cas.AddBytes(data)
+	if os.IsExist(err) {
 		stats.nbSkipped += 1
 		stats.skipped += int64(len(data))
 	} else if err != nil {

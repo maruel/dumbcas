@@ -28,7 +28,7 @@ func TestPrefixSpace(t *testing.T) {
 		4: S{65536, "ffff"},
 	}
 	for prefixLength, s := range checks {
-		x := PrefixSpace(uint(prefixLength))
+		x := prefixSpace(uint(prefixLength))
 		if x != s.i {
 			t.Fatalf("%d: %d != %d", prefixLength, x, s.i)
 		}

@@ -51,12 +51,12 @@ type ReadSeekCloser interface {
 	io.Closer
 }
 
-func (c *casTable) RelPath(hash string) string {
+func (c *casTable) relPath(hash string) string {
 	return path.Join(casName, hash[:c.prefixLength], hash[c.prefixLength:])
 }
 
 // Converts an entry in the table into a proper file path.
-func (c *casTable) FilePath(hash string) string {
+func (c *casTable) filePath(hash string) string {
 	match := c.validPath.FindStringSubmatch(hash)
 	if match == nil {
 		log.Printf("filePath(%s) is invalid", hash)
@@ -70,7 +70,7 @@ func (c *casTable) FilePath(hash string) string {
 	return fullPath
 }
 
-func PrefixSpace(prefixLength uint) int {
+func prefixSpace(prefixLength uint) int {
 	if prefixLength == 0 {
 		return 0
 	}
@@ -90,7 +90,7 @@ func MakeCasTable(rootDir string) (CasTable, error) {
 	} else if !os.IsExist(err) {
 		// Create all the prefixes at initialization time so they don't need to be
 		// tested all the time.
-		for i := 0; i < PrefixSpace(uint(prefixLength)); i++ {
+		for i := 0; i < prefixSpace(uint(prefixLength)); i++ {
 			prefix := fmt.Sprintf("%0*x", prefixLength, i)
 			if err := os.Mkdir(path.Join(casDir, prefix), 0750); err != nil && !os.IsExist(err) {
 				return nil, fmt.Errorf("Failed to create %s: %s\n", prefix, err)
@@ -112,7 +112,7 @@ func (c *casTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal failure. CasTable received an invalid url: "+r.URL.Path, http.StatusNotImplemented)
 		return
 	}
-	casItem := c.FilePath(r.URL.Path[1:])
+	casItem := c.filePath(r.URL.Path[1:])
 	if casItem == "" {
 		http.Error(w, "Invalid CAS url: "+r.URL.Path, http.StatusBadRequest)
 		return
@@ -167,7 +167,7 @@ func (c *casTable) Enumerate(items chan<- Item) {
 // Adds an entry with the hash calculated already if not alreaady present. It's
 // a performance optimization to be able to not write the object unless needed.
 func (c *casTable) AddEntry(source io.Reader, hash string) error {
-	dst := c.FilePath(hash)
+	dst := c.filePath(hash)
 	df, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0640)
 	if os.IsExist(err) {
 		return err
@@ -187,7 +187,7 @@ func (c *casTable) AddBytes(data []byte) (string, error) {
 }
 
 func (c *casTable) Open(hash string) (ReadSeekCloser, error) {
-	fp := c.FilePath(hash)
+	fp := c.filePath(hash)
 	if fp == "" {
 		return nil, os.ErrInvalid
 	}
@@ -214,6 +214,6 @@ func (c *casTable) WarnIfFsckIsNeeded() bool {
 }
 
 func (c *casTable) Trash(item string, t *Trash) error {
-	itemPath := c.RelPath(item)
+	itemPath := c.relPath(item)
 	return t.Move(itemPath)
 }

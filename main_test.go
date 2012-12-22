@@ -285,7 +285,7 @@ func TestSmoke(t *testing.T) {
 	// Make sure it gets a redirect.
 	r := f.get("/content/retrieve/nodes", "/content/retrieve/nodes/")
 	month := time.Now().UTC().Format("2006-01")
-	expected := fmt.Sprintf("<html><body><pre><a href=\"%s/\">%s/</a>\n</pre></body></html>", month, month)
+	expected := fmt.Sprintf("<html><body><pre><a href=\"%s/\">%s/</a>\n<a href=\"tags/\">tags/</a>\n</pre></body></html>", month, month)
 	expectedBody(t, r, expected)
 	r = f.get("/content/retrieve/nodes/"+month, "/content/retrieve/nodes/"+month+"/")
 	actual := readBody(t, r)

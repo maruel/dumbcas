@@ -412,12 +412,14 @@ func archiveMain(stdout io.Writer, toArchiveArg string) error {
 		return fmt.Errorf("Failed to create %s: %s\n", monthDir, err)
 	}
 	suffix := 0
+	nodePath := ""
 	for {
 		nodeName := hostname + "_" + now.Format("2006-01-02_15-04-05") + "_" + path.Base(toArchive)
 		if suffix != 0 {
 			nodeName += fmt.Sprintf("(%d)", suffix)
 		}
-		f, err := os.OpenFile(path.Join(monthDir, nodeName), os.O_WRONLY|os.O_EXCL|os.O_CREATE, 0640)
+		nodePath = path.Join(monthDir, nodeName)
+		f, err := os.OpenFile(nodePath, os.O_WRONLY|os.O_EXCL|os.O_CREATE, 0640)
 		if err != nil {
 			// Try ad nauseam.
 			suffix += 1
@@ -428,6 +430,22 @@ func archiveMain(stdout io.Writer, toArchiveArg string) error {
 			log.Printf("Saved node: %s", path.Join(monthName, nodeName))
 			break
 		}
+	}
+
+	// Also update the tag by creating a symlink.
+	tagsDir := path.Join(nodesRoot, TagsName)
+	if err := os.MkdirAll(tagsDir, 0750); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("Failed to create %s: %s\n", tagsDir, err)
+	}
+	tagPath := path.Join(tagsDir, path.Base(toArchive))
+	relPath, err := filepath.Rel(tagsDir, nodePath)
+	if err != nil {
+		return err
+	}
+	// Ignore error.
+	os.Remove(tagPath)
+	if err := os.Symlink(relPath, tagPath); err != nil {
+		return fmt.Errorf("Failed to create tag %s: %s", tagPath, err)
 	}
 	return nil
 }

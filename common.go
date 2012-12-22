@@ -23,7 +23,12 @@ import (
 	"path/filepath"
 )
 
+// The nodes are stored in a separate directory from the CAS store.
 const NodesName = "nodes"
+
+// Tags is a Nodes subdirectory, to implement the equivalent of permanent
+// nodes. They are overwritten automatically.
+const TagsName = "tags"
 
 // Common flags.
 var Root string

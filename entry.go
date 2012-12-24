@@ -41,6 +41,14 @@ func (e *Entry) SortedFiles() []string {
 	return out
 }
 
+func (e *Entry) CountMembers() int {
+	countI := 1
+	for _, v := range e.Files {
+		countI += v.CountMembers()
+	}
+	return countI
+}
+
 // Prints the Entry in Yaml-inspired output.
 func (e *Entry) Print(w io.Writer, indent string) {
 	if e.Sha1 != "" {

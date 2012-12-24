@@ -54,14 +54,6 @@ func RecursePath(cache *EntryCache, entry *Entry, itemPath string) (*EntryCache,
 	return cache, entry
 }
 
-func CountSize(i *Entry) int {
-	countI := 1
-	for _, v := range i.Files {
-		countI += CountSize(v)
-	}
-	return countI
-}
-
 func UpdateFile(cache *EntryCache, entry *Entry, item TreeItem) error {
 	//log.Printf("UpdateFile(%s, %s)", item.FullPath)
 	now := time.Now().Unix()
@@ -224,7 +216,7 @@ func (s *Stats) recurseTree(itemPath string, entry *Entry, cas CasTable) error {
 }
 
 func casArchive(stdout io.Writer, entries *Entry, cas CasTable) (string, error) {
-	log.Printf("casArchive(%d entries)\n", CountSize(entries))
+	log.Printf("casArchive(%d entries)\n", entries.CountMembers())
 	root := ""
 	if filepath.Separator == '/' {
 		root = "/"

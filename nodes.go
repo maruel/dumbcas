@@ -25,6 +25,61 @@ import (
 	"time"
 )
 
+// The nodes are stored in a separate directory from the CAS store.
+const nodesName = "nodes"
+
+// Tags is a Nodes subdirectory, to implement the equivalent of permanent
+// nodes. They are overwritten automatically.
+const tagsName = "tags"
+
+type Node struct {
+	Entry   string
+	Comment string `json:",omitempty"`
+}
+
+type NodesTable interface {
+	http.Handler
+	// Temporary.
+	Root() string
+}
+
+type nodesTable struct {
+	nodesDir      string
+	cas           CasTable
+	maxItems      int
+	mutex         sync.Mutex
+	recentNodes   map[string]*nodeCache
+	recentEntries map[string]*entryCache
+}
+
+type nodeCache struct {
+	Node
+	lastAccess time.Time
+}
+
+type entryCache struct {
+	EntryFileSystem
+	lastAccess time.Time
+}
+
+func LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
+	nodesDir := path.Join(rootDir, nodesName)
+	if err := os.Mkdir(nodesDir, 0750); err != nil && !os.IsExist(err) {
+		return nil, fmt.Errorf("LoadNodesTable(%s): Failed to create %s: %s\n", rootDir, nodesDir, err)
+	}
+	return &nodesTable{
+		nodesDir:      nodesDir,
+		cas:           cas,
+		maxItems:      10,
+		recentNodes:   map[string]*nodeCache{},
+		recentEntries: map[string]*entryCache{},
+	}, nil
+}
+
+func (n *nodesTable) Root() string {
+	return n.nodesDir
+}
+
 func loadReaderAsJson(r io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(r)
 	if err == nil {
@@ -80,40 +135,8 @@ func dirList(w http.ResponseWriter, items []string) {
 	io.WriteString(w, "</pre></body></html>")
 }
 
-type nodeCache struct {
-	Node
-	lastAccess time.Time
-}
-
-type entryCache struct {
-	EntryFileSystem
-	lastAccess time.Time
-}
-
-// Serves the NodesName directory and its virtual directory.
-type nodeFileSystem struct {
-	nodesDir string
-	cas      CasTable
-	maxItems int
-
-	// Mutables
-	mutex         sync.Mutex
-	recentNodes   map[string]*nodeCache
-	recentEntries map[string]*entryCache
-}
-
-func makeNodeFileSystem(nodesDir string, cas CasTable) http.Handler {
-	return &nodeFileSystem{
-		nodesDir:      nodesDir,
-		cas:           cas,
-		maxItems:      10,
-		recentNodes:   map[string]*nodeCache{},
-		recentEntries: map[string]*entryCache{},
-	}
-}
-
 // Loads a node from the file system if found.
-func (n *nodeFileSystem) getNode(url string) (*Node, string, error) {
+func (n *nodesTable) getNode(url string) (*Node, string, error) {
 	prefix := ""
 	rest := url
 	for rest != "" {
@@ -153,7 +176,7 @@ func (n *nodeFileSystem) getNode(url string) (*Node, string, error) {
 
 // Tries to find the node in the cache by testing all the cached nodes. It's
 // faster than touching the file system.
-func (n *nodeFileSystem) findCachedNode(url string) (*Node, string) {
+func (n *nodesTable) findCachedNode(url string) (*Node, string) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	for key, node := range n.recentNodes {
@@ -166,7 +189,7 @@ func (n *nodeFileSystem) findCachedNode(url string) (*Node, string) {
 	return nil, ""
 }
 
-func (n *nodeFileSystem) updateNodeCache(nodeName string, nodeObj *nodeCache) {
+func (n *nodesTable) updateNodeCache(nodeName string, nodeObj *nodeCache) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.recentNodes[nodeName] = nodeObj
@@ -184,7 +207,7 @@ func (n *nodeFileSystem) updateNodeCache(nodeName string, nodeObj *nodeCache) {
 	}
 }
 
-func (n *nodeFileSystem) getEntry(entryName string) (*entryCache, error) {
+func (n *nodesTable) getEntry(entryName string) (*entryCache, error) {
 	n.mutex.Lock()
 	if entryObj, ok := n.recentEntries[entryName]; ok {
 		entryObj.lastAccess = time.Now()
@@ -207,7 +230,7 @@ func (n *nodeFileSystem) getEntry(entryName string) (*entryCache, error) {
 	return entryObj, nil
 }
 
-func (n *nodeFileSystem) updateEntryCache(entryName string, entryObj *entryCache) {
+func (n *nodesTable) updateEntryCache(entryName string, entryObj *entryCache) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.recentEntries[entryName] = entryObj
@@ -225,9 +248,10 @@ func (n *nodeFileSystem) updateEntryCache(entryName string, entryObj *entryCache
 	}
 }
 
-func (n *nodeFileSystem) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// Serves the NodesName directory and its virtual directory.
+func (n *nodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "" || r.URL.Path[0] != '/' {
-		http.Error(w, "Internal failure. nodeFileSystem received an invalid url: "+r.URL.Path, http.StatusNotImplemented)
+		http.Error(w, "Internal failure. nodesTable received an invalid url: "+r.URL.Path, http.StatusNotImplemented)
 		return
 	}
 
@@ -275,7 +299,7 @@ func (n *nodeFileSystem) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // Either failed to load a Node or an Entry.
-func (n *nodeFileSystem) Corruption(w http.ResponseWriter, format string, a ...interface{}) {
+func (n *nodesTable) Corruption(w http.ResponseWriter, format string, a ...interface{}) {
 	n.cas.NeedFsck()
 	str := fmt.Sprintf(format, a)
 	http.Error(w, "Internal failure: "+str, http.StatusNotImplemented)
@@ -283,7 +307,7 @@ func (n *nodeFileSystem) Corruption(w http.ResponseWriter, format string, a ...i
 
 // Converts the Node request to a EntryFileSystem request. This loads the entry
 // file and redirects to its virtual file system.
-func (n *nodeFileSystem) serveObj(w http.ResponseWriter, r *http.Request, node *Node) {
+func (n *nodesTable) serveObj(w http.ResponseWriter, r *http.Request, node *Node) {
 	entryFs, err := n.getEntry(node.Entry)
 	if err != nil {
 		n.Corruption(w, "Failed to load Entry %s: %s", node.Entry, err)

@@ -14,7 +14,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"path"
 )
 
 // Converts an handler to log every HTTP request.
@@ -97,16 +96,17 @@ func webMain(port int, ready chan<- net.Listener, l *log.Logger) error {
 		return err
 	}
 
-	nodesDir := path.Join(Root, NodesName)
-	if !isDir(nodesDir) {
-		return fmt.Errorf("Please archive something first into %s", Root)
-	}
+	nodes, err := LoadNodesTable(Root, cas)
+	// TODO(maruel): Add back.
+	//if !isDir(nodesDir) {
+	//	return fmt.Errorf("Please archive something first into %s", Root)
+	//}
 
 	serveMux := http.NewServeMux()
 
 	x := http.StripPrefix("/content/retrieve/default", cas)
 	serveMux.Handle("/content/retrieve/default/", Restrict(x, "GET"))
-	x = http.StripPrefix("/content/retrieve/nodes", makeNodeFileSystem(nodesDir, cas))
+	x = http.StripPrefix("/content/retrieve/nodes", nodes)
 	serveMux.Handle("/content/retrieve/nodes/", Restrict(x, "GET"))
 	serveMux.Handle("/", Restrict(http.RedirectHandler("/content/retrieve/nodes/", http.StatusFound), "GET"))
 

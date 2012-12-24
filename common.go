@@ -22,23 +22,11 @@ import (
 	"path/filepath"
 )
 
-// The nodes are stored in a separate directory from the CAS store.
-const NodesName = "nodes"
-
-// Tags is a Nodes subdirectory, to implement the equivalent of permanent
-// nodes. They are overwritten automatically.
-const TagsName = "tags"
-
 // Common flags.
 var Root string
 
 // If true, all processing should be stopped.
 var Stop bool
-
-type Node struct {
-	Entry   string
-	Comment string `json:",omitempty"`
-}
 
 func GetCommonFlags() flag.FlagSet {
 	flags := flag.FlagSet{}

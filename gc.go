@@ -12,7 +12,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"path"
 )
 
 var cmdGc = &Command{
@@ -38,8 +37,10 @@ func gcMain(name string, l *log.Logger) error {
 		return err
 	}
 
-	nodesDir := path.Join(Root, NodesName)
-	//trash := MakeTrash(Root)
+	nodes, err := LoadNodesTable(Root, cas)
+	if err != nil {
+		return err
+	}
 	entries := map[string]bool{}
 
 	cI := make(chan Item)
@@ -59,7 +60,7 @@ func gcMain(name string, l *log.Logger) error {
 
 	// Load all the nodes.
 	cT := make(chan TreeItem)
-	go EnumerateTree(nodesDir, cT)
+	go EnumerateTree(nodes.Root(), cT)
 	node := &Node{}
 	entry := &Entry{}
 	for {

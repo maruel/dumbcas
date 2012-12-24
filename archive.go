@@ -277,10 +277,11 @@ func archiveMain(stdout io.Writer, l *log.Logger, toArchiveArg string, loadCache
 	}
 
 	// Now the archival part. Create the basic directory structure.
-	nodesRoot := path.Join(Root, NodesName)
-	if err := os.Mkdir(nodesRoot, 0750); err != nil && !os.IsExist(err) {
-		return fmt.Errorf("Failed to create %s: %s\n", Root, err)
+	nodes, err := LoadNodesTable(Root, cas)
+	if err != nil {
+		return err
 	}
+	nodesRoot := nodes.Root()
 	entrySha1, err := casArchive(stdout, l, entry, cas)
 	if err != nil {
 		return err
@@ -326,7 +327,7 @@ func archiveMain(stdout io.Writer, l *log.Logger, toArchiveArg string, loadCache
 	}
 
 	// Also update the tag by creating a symlink.
-	tagsDir := path.Join(nodesRoot, TagsName)
+	tagsDir := path.Join(nodesRoot, tagsName)
 	if err := os.MkdirAll(tagsDir, 0750); err != nil && !os.IsExist(err) {
 		return fmt.Errorf("Failed to create %s: %s\n", tagsDir, err)
 	}

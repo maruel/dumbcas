@@ -22,8 +22,6 @@ import (
 	"time"
 )
 
-var LoadCache func() (Cache, error) = loadCache
-
 type EntryCache struct {
 	Sha1       string                 `json:"h,omitempty"`
 	Size       int64                  `json:"s,omitempty"`
@@ -74,7 +72,7 @@ type Cache interface {
 
 // Loads the cache from ~/.dumbcas/cache.json and keeps it open until the call
 // to Save().
-func loadCache() (Cache, error) {
+func LoadCache() (Cache, error) {
 	usr, err := user.Current()
 	if err != nil {
 		return nil, err

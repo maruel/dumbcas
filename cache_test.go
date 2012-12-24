@@ -33,15 +33,15 @@ func (c *cacheMock) Close() {
 	c.closed = true
 }
 
-func MockCache(t *testing.T) {
-	LoadCache = func() (Cache, error) {
+func MockCache(t *testing.T) func() (Cache, error) {
+	return func() (Cache, error) {
 		return &cacheMock{&EntryCache{}, false, t}, nil
 	}
 }
 
 func TestCache(t *testing.T) {
 	t.Parallel()
-	cache, err := loadCache()
+	cache, err := LoadCache()
 	if err != nil {
 		t.Fatal(err)
 	}

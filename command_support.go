@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 	"text/template"
@@ -31,6 +32,7 @@ type Application struct {
 	Commands []*Command
 	Out      io.Writer
 	Err      io.Writer
+	Log      *log.Logger
 }
 
 type Command struct {
@@ -85,6 +87,9 @@ func (a *Application) Run(args []string) int {
 	}
 	if a.Err == nil {
 		a.Err = os.Stderr
+	}
+	if a.Log == nil {
+		a.Log = log.New(a.Err, "", log.LstdFlags)
 	}
 	// Initialize commands.
 	for _, cmd := range a.Commands {

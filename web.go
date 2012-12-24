@@ -36,11 +36,9 @@ func loadReaderAsJson(r io.Reader, value interface{}) error {
 }
 
 func loadFileAsJson(filepath string, value interface{}) error {
-	//log.Printf("loadFileAsJson(%s)", filepath)
 	f, err := os.Open(filepath)
 	if err != nil {
-		log.Printf("Failed to load %s", filepath)
-		return err
+		return fmt.Errorf("loadFileAsJson(%s): %s", filepath, err)
 	}
 	defer f.Close()
 	return loadReaderAsJson(f, value)
@@ -49,6 +47,7 @@ func loadFileAsJson(filepath string, value interface{}) error {
 // Converts an handler to log every HTTP request.
 type LoggingHandler struct {
 	handler http.Handler
+	l       *log.Logger
 }
 
 type loggingResponseWriter struct {
@@ -68,10 +67,10 @@ func (l *loggingResponseWriter) WriteHeader(status int) {
 	l.status = status
 }
 
-func (l LoggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (l *LoggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l_w := &loggingResponseWriter{ResponseWriter: w}
 	l.handler.ServeHTTP(l_w, r)
-	log.Printf("%s - %3d %6db %4s %s",
+	l.l.Printf("%s - %3d %6db %4s %s",
 		r.RemoteAddr,
 		l_w.status,
 		l_w.length,
@@ -131,7 +130,6 @@ func localRedirect(w http.ResponseWriter, r *http.Request, newPath string) {
 	if q := r.URL.RawQuery; q != "" {
 		newPath += "?" + q
 	}
-	//log.Printf("localRedirect(%s)", newPath)
 	w.Header().Set("Location", newPath)
 	w.WriteHeader(http.StatusMovedPermanently)
 }
@@ -197,7 +195,6 @@ func (n *nodeFileSystem) getNode(url string) (*Node, string, error) {
 		}
 		// Convert to OS file path.
 		relPath := strings.Replace(strings.Trim(prefix, "/"), "/", string(filepath.Separator), 0)
-		//log.Printf("'%s', '%s', '%s', %d", prefix, rest, relPath, i)
 		f, err := os.Open(path.Join(n.nodesDir, relPath))
 		if err != nil {
 			return nil, "", err
@@ -210,7 +207,6 @@ func (n *nodeFileSystem) getNode(url string) (*Node, string, error) {
 		if !stat.IsDir() {
 			node := &nodeCache{}
 			if err := loadReaderAsJson(f, &node.Node); err == nil {
-				//log.Printf("getNode(%s) -> %s, %s", url, prefix, rest)
 				node.lastAccess = time.Now()
 				go n.updateNodeCache(prefix, node)
 				return &node.Node, rest, err
@@ -231,7 +227,6 @@ func (n *nodeFileSystem) findCachedNode(url string) (*Node, string) {
 	for key, node := range n.recentNodes {
 		if strings.HasPrefix(url, key) {
 			rest := url[len(key):]
-			//log.Printf("findCachedNode(%s) -> %s, %s", url, key, rest)
 			node.lastAccess = time.Now()
 			return &node.Node, rest
 		}
@@ -308,7 +303,6 @@ func (n *nodeFileSystem) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Path[1:]
 	node, rest := n.findCachedNode(name)
 	if node != nil {
-		//log.Printf("Found cached node; '%s'", rest)
 		// Check manually for the root.
 		if rest == "" && name[len(name)-1] != '/' {
 			localRedirect(w, r, path.Base(r.URL.Path)+"/")
@@ -358,7 +352,6 @@ func (n *nodeFileSystem) Corruption(w http.ResponseWriter, format string, a ...i
 // Converts the Node request to a EntryFileSystem request. This loads the entry
 // file and redirects to its virtual file system.
 func (n *nodeFileSystem) serveObj(w http.ResponseWriter, r *http.Request, node *Node) {
-	//log.Printf("nodeFileSystem.serveObj(%s, %s)", r.URL.Path, node.Entry)
 	entryFs, err := n.getEntry(node.Entry)
 	if err != nil {
 		n.Corruption(w, "Failed to load Entry %s: %s", node.Entry, err)
@@ -375,7 +368,7 @@ var cmdWeb = &Command{
 	Flag:      GetCommonFlags(),
 }
 
-func webMain(port int, ready chan<- net.Listener) error {
+func webMain(port int, ready chan<- net.Listener, l *log.Logger) error {
 	cas, err := CommonFlag(false, true)
 	if err != nil {
 		return err
@@ -396,20 +389,20 @@ func webMain(port int, ready chan<- net.Listener) error {
 
 	s := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: LoggingHandler{serveMux},
+		Handler: &LoggingHandler{serveMux, l},
 	}
-	l, e := net.Listen("tcp", s.Addr)
+	ls, e := net.Listen("tcp", s.Addr)
 	if e != nil {
 		return e
 	}
 
-	_, portStr, _ := net.SplitHostPort(l.Addr().String())
-	log.Printf("Serving %s on port %s", Root, portStr)
+	_, portStr, _ := net.SplitHostPort(ls.Addr().String())
+	l.Printf("Serving %s on port %s", Root, portStr)
 
 	if ready != nil {
-		ready <- l
+		ready <- ls
 	}
-	return s.Serve(l)
+	return s.Serve(ls)
 }
 
 // Flags.
@@ -424,7 +417,7 @@ func runWeb(a *Application, cmd *Command, args []string) int {
 		fmt.Fprintf(a.Err, "%s: Unsupported arguments.\n", a.Name)
 		return 1
 	}
-	if err := webMain(webPort, nil); err != nil {
+	if err := webMain(webPort, nil, a.Log); err != nil {
 		fmt.Fprintf(a.Err, "%s: %s\n", a.Name, err)
 		return 1
 	}

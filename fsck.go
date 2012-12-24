@@ -22,7 +22,7 @@ var cmdFsck = &Command{
 	Flag:      GetCommonFlags(),
 }
 
-func fsckMain() error {
+func fsckMain(l *log.Logger) error {
 	cas, err := CommonFlag(false, true)
 	if err != nil {
 		return err
@@ -52,7 +52,7 @@ func fsckMain() error {
 			}
 			if actual != item.Item {
 				corrupted += 1
-				log.Printf("Found corrupted object, %s != %s", item.Item, actual)
+				l.Printf("Found corrupted object, %s != %s", item.Item, actual)
 				if err := cas.Remove(item.Item); err != nil {
 					return fmt.Errorf("Failed to trash object %s: %s", item.Item, err)
 				}
@@ -63,7 +63,7 @@ func fsckMain() error {
 			break
 		}
 	}
-	log.Printf("Scanned %d entries; found %d corrupted, %d invalid.", count, corrupted)
+	l.Printf("Scanned %d entries; found %d corrupted, %d invalid.", count, corrupted)
 	return nil
 }
 
@@ -72,7 +72,7 @@ func runFsck(a *Application, cmd *Command, args []string) int {
 		fmt.Fprintf(a.Err, "%s: Unsupported arguments.\n", a.Name)
 		return 1
 	}
-	if err := fsckMain(); err != nil {
+	if err := fsckMain(a.Log); err != nil {
 		fmt.Fprintf(a.Err, "%s: %s\n", a.Name, err)
 		return 1
 	}

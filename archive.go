@@ -55,7 +55,6 @@ func RecursePath(cache *EntryCache, entry *Entry, itemPath string) (*EntryCache,
 }
 
 func UpdateFile(cache *EntryCache, entry *Entry, item TreeItem) error {
-	//log.Printf("UpdateFile(%s, %s)", item.FullPath)
 	now := time.Now().Unix()
 	size := item.FileInfo.Size()
 	timestamp := item.FileInfo.ModTime().Unix()
@@ -106,9 +105,9 @@ func readFileAsStrings(filepath string) ([]string, error) {
 }
 
 // Calculates each entry. Assumes inputs is cleaned paths.
-func processWithCache(stdout io.Writer, inputs []string) (*Entry, error) {
-	log.Printf("processWithCache(%d)", len(inputs))
-	cache, err := LoadCache()
+func processWithCache(stdout io.Writer, l *log.Logger, inputs []string, loadCache func() (Cache, error)) (*Entry, error) {
+	l.Printf("processWithCache(%d)", len(inputs))
+	cache, err := loadCache()
 	if err != nil {
 		return nil, err
 	}
@@ -211,8 +210,8 @@ func (s *Stats) recurseTree(itemPath string, entry *Entry, cas CasTable) error {
 	return nil
 }
 
-func casArchive(stdout io.Writer, entries *Entry, cas CasTable) (string, error) {
-	log.Printf("casArchive(%d entries)\n", entries.CountMembers())
+func casArchive(stdout io.Writer, l *log.Logger, entries *Entry, cas CasTable) (string, error) {
+	l.Printf("casArchive(%d entries)\n", entries.CountMembers())
 	root := ""
 	if filepath.Separator == '/' {
 		root = "/"
@@ -235,7 +234,7 @@ func casArchive(stdout io.Writer, entries *Entry, cas CasTable) (string, error) 
 		stats.nbArchived += 1
 		stats.archived += int64(len(data))
 	}
-	log.Printf(
+	l.Printf(
 		"Archived %d files (%d bytes) Skipped %d files, (%d bytes)\n",
 		stats.nbArchived, stats.archived, stats.nbSkipped, stats.skipped)
 	return entrySha1, nil
@@ -253,7 +252,7 @@ func cleanupList(relDir string, inputs []string) {
 	}
 }
 
-func archiveMain(stdout io.Writer, toArchiveArg string) error {
+func archiveMain(stdout io.Writer, l *log.Logger, toArchiveArg string, loadCache func() (Cache, error)) error {
 	cas, err := CommonFlag(true, true)
 	if err != nil {
 		return err
@@ -270,9 +269,9 @@ func archiveMain(stdout io.Writer, toArchiveArg string) error {
 	}
 	// Make sure the file itself is archived too.
 	inputs = append(inputs, toArchive)
-	log.Printf("Found %d entries to backup in %s", len(inputs), toArchive)
+	l.Printf("Found %d entries to backup in %s", len(inputs), toArchive)
 	cleanupList(path.Dir(toArchive), inputs)
-	entry, err := processWithCache(stdout, inputs)
+	entry, err := processWithCache(stdout, l, inputs, loadCache)
 	if err != nil {
 		return err
 	}
@@ -282,7 +281,7 @@ func archiveMain(stdout io.Writer, toArchiveArg string) error {
 	if err := os.Mkdir(nodesRoot, 0750); err != nil && !os.IsExist(err) {
 		return fmt.Errorf("Failed to create %s: %s\n", Root, err)
 	}
-	entrySha1, err := casArchive(stdout, entry, cas)
+	entrySha1, err := casArchive(stdout, l, entry, cas)
 	if err != nil {
 		return err
 	}
@@ -321,7 +320,7 @@ func archiveMain(stdout io.Writer, toArchiveArg string) error {
 			if _, err = f.Write(data); err != nil {
 				return fmt.Errorf("Failed to write %s: %s", f.Name(), err)
 			}
-			log.Printf("Saved node: %s", path.Join(monthName, nodeName))
+			l.Printf("Saved node: %s", path.Join(monthName, nodeName))
 			break
 		}
 	}
@@ -365,7 +364,7 @@ func runArchive(a *Application, cmd *Command, args []string) int {
 		return 1
 	}
 	HandleCtrlC()
-	if err := archiveMain(a.Out, args[0]); err != nil {
+	if err := archiveMain(a.Out, a.Log, args[0], LoadCache); err != nil {
 		fmt.Fprintf(a.Err, "%s: %s\n", a.Name, err)
 		return 1
 	}

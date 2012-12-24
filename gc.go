@@ -32,7 +32,7 @@ func TagRecurse(entries map[string]bool, entry *Entry) {
 	}
 }
 
-func gcMain(name string) error {
+func gcMain(name string, l *log.Logger) error {
 	cas, err := CommonFlag(false, false)
 	if err != nil {
 		return err
@@ -55,7 +55,7 @@ func gcMain(name string) error {
 			break
 		}
 	}
-	log.Printf("Found %d entries", len(entries))
+	l.Printf("Found %d entries", len(entries))
 
 	// Load all the nodes.
 	cT := make(chan TreeItem)
@@ -98,7 +98,7 @@ func gcMain(name string) error {
 			orphans = append(orphans, entry)
 		}
 	}
-	log.Printf("Found %d orphan", len(orphans))
+	l.Printf("Found %d orphan", len(orphans))
 	for _, orphan := range orphans {
 		if err := cas.Remove(orphan); err != nil {
 			cas.NeedFsck()
@@ -113,7 +113,7 @@ func runGc(a *Application, cmd *Command, args []string) int {
 		fmt.Fprintf(a.Err, "%s: Unsupported arguments.\n", a.Name)
 		return 1
 	}
-	if err := gcMain(a.Name); err != nil {
+	if err := gcMain(a.Name, a.Log); err != nil {
 		fmt.Fprintf(a.Err, "%s: %s\n", a.Name, err)
 		return 1
 	}

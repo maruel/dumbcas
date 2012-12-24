@@ -16,7 +16,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"path"
@@ -124,7 +123,6 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) {
 
 // Walk the directory tree.
 func EnumerateTree(rootDir string, c chan<- TreeItem) {
-	log.Printf("EnumerateTree(%s)", rootDir)
 	recurseEnumerateTree(rootDir, c)
 	c <- TreeItem{}
 }

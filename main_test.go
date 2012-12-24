@@ -32,7 +32,7 @@ var bufLog bytes.Buffer
 
 func init() {
 	// Reduces output. Comment out to get more logs.
-	//log.SetOutput(&bufLog)
+	log.SetOutput(&bufLog)
 	log.SetFlags(log.Lmicroseconds)
 }
 
@@ -98,6 +98,8 @@ type fixture struct {
 	a           Application
 	bufOut      bytes.Buffer
 	bufErr      bytes.Buffer
+	bufLog      bytes.Buffer
+	log         *log.Logger
 	tempArchive string
 	tempData    string
 	socket      net.Listener
@@ -111,7 +113,12 @@ func baseInit(t *testing.T) *fixture {
 	t.Parallel()
 
 	// Create a copy of application and use it.
-	f := &fixture{testing.T: t, a: *application, closed: make(chan bool)}
+	f := &fixture{
+		testing.T: t,
+		a:         *application,
+		log:       log.New(&bufLog, "", 0),
+		closed:    make(chan bool),
+	}
 	for i, _ := range f.a.Commands {
 		cmd := &Command{}
 		*cmd = *f.a.Commands[i]
@@ -119,6 +126,7 @@ func baseInit(t *testing.T) *fixture {
 	}
 	f.a.Err = &f.bufErr
 	f.a.Out = &f.bufOut
+	f.a.Log = f.log
 	return f
 }
 
@@ -174,7 +182,7 @@ func (f *fixture) goWeb() {
 	}
 	c := make(chan net.Listener)
 	go func() {
-		webMain(0, c)
+		webMain(0, c, f.log)
 		f.closed <- true
 	}()
 	f.socket = <-c

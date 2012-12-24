@@ -237,7 +237,7 @@ func casArchive(stdout io.Writer, entries *Entry, cas CasTable) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("Failed to marshall entry file: %s\n", err)
 	}
-	entrySha1, err := cas.AddBytes(data)
+	entrySha1, err := AddBytes(cas, data)
 	if os.IsExist(err) {
 		stats.nbSkipped += 1
 		stats.skipped += int64(len(data))

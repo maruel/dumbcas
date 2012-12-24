@@ -38,7 +38,6 @@ type CasTable interface {
 	http.Handler
 	Enumerate(items chan<- Item)
 	AddEntry(source io.Reader, hash string) error
-	AddBytes(data []byte) (string, error)
 	Open(hash string) (ReadSeekCloser, error)
 	NeedFsck()
 	WarnIfFsckIsNeeded() bool
@@ -180,12 +179,6 @@ func (c *casTable) AddEntry(source io.Reader, hash string) error {
 	return err
 }
 
-// Utility function when the data is already in memory but not yet hashed.
-func (c *casTable) AddBytes(data []byte) (string, error) {
-	hash := sha1Bytes(data)
-	return hash, c.AddEntry(bytes.NewBuffer(data), hash)
-}
-
 func (c *casTable) Open(hash string) (ReadSeekCloser, error) {
 	fp := c.filePath(hash)
 	if fp == "" {
@@ -216,4 +209,10 @@ func (c *casTable) WarnIfFsckIsNeeded() bool {
 func (c *casTable) Trash(item string, t *Trash) error {
 	itemPath := c.relPath(item)
 	return t.Move(itemPath)
+}
+
+// Utility function when the data is already in memory but not yet hashed.
+func AddBytes(c CasTable, data []byte) (string, error) {
+	hash := sha1Bytes(data)
+	return hash, c.AddEntry(bytes.NewBuffer(data), hash)
 }

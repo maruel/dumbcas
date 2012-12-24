@@ -15,45 +15,38 @@ import (
 
 type cacheMock struct {
 	root   *EntryCache
-	saved  bool
 	closed bool
 	t      *testing.T
 }
 
 func (c *cacheMock) Root() *EntryCache {
-	if c.saved == true || c.closed == true {
+	if c.closed == true {
 		c.t.Fail()
 	}
 	return c.root
 }
 
-func (c *cacheMock) Save() error {
-	if c.saved == true || c.closed == true {
-		c.t.Fail()
-	}
-	c.saved = true
-	return nil
-}
-
-func (c *cacheMock) Close() error {
-	if c.saved == false || c.closed == true {
+func (c *cacheMock) Close() {
+	if c.closed == true {
 		c.t.Fail()
 	}
 	c.closed = true
-	return nil
+}
+
+func MockCache(t *testing.T) {
+	LoadCache = func() (Cache, error) {
+		return &cacheMock{&EntryCache{}, false, t}, nil
+	}
 }
 
 func TestCache(t *testing.T) {
 	t.Parallel()
-	cache, err := LoadCache()
+	cache, err := loadCache()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cache.Close()
 	if cache.Root() == nil {
-		t.Fatal(err)
-	}
-	if err = cache.Save(); err != nil {
 		t.Fatal(err)
 	}
 }

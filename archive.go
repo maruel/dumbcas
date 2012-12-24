@@ -165,10 +165,6 @@ func processWithCache(stdout io.Writer, inputs []string) (*Entry, error) {
 		}
 	}
 	fmt.Fprintf(stdout, "\n")
-	// Save the cache right away in case archival fails.
-	if err = cache.Save(); err != nil {
-		return nil, err
-	}
 	if Stop {
 		return nil, errors.New("Ctrl-C'ed out")
 	}

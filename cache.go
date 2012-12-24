@@ -22,6 +22,8 @@ import (
 	"time"
 )
 
+var LoadCache func() (Cache, error) = loadCache
+
 type EntryCache struct {
 	Sha1       string                 `json:"h,omitempty"`
 	Size       int64                  `json:"s,omitempty"`
@@ -52,11 +54,11 @@ func (e *EntryCache) SortedFiles() []string {
 }
 
 func (e *EntryCache) CountMembers() int {
-	countI := 1
+	sum := 1
 	for _, v := range e.Files {
-		countI += v.CountMembers()
+		sum += v.CountMembers()
 	}
-	return countI
+	return sum
 }
 
 type cache struct {
@@ -66,11 +68,13 @@ type cache struct {
 
 type Cache interface {
 	Root() *EntryCache
-	Save() error
+	// Closes (and save) the cache.
 	Close()
 }
 
-func LoadCache() (Cache, error) {
+// Loads the cache from ~/.dumbcas/cache.json and keeps it open until the call
+// to Save().
+func loadCache() (Cache, error) {
 	usr, err := user.Current()
 	if err != nil {
 		return nil, err
@@ -102,9 +106,13 @@ func (c *cache) Root() *EntryCache {
 	return c.root
 }
 
-func (c *cache) Save() error {
-	// TODO(maruel): When testing, the entries shouldn't be saved in the cache.
+func (c *cache) Close() {
 	// Trim anything > ~1yr old.
+	defer func() {
+		c.f.Close()
+		c.f = nil
+	}()
+
 	one_year := time.Now().Unix() - (365 * 24 * 60 * 60)
 	for relFile, file := range c.root.Files {
 		if file.LastTested < one_year {
@@ -114,18 +122,15 @@ func (c *cache) Save() error {
 	log.Printf("Saving Cache: %d entries.", c.root.CountMembers()-1)
 	data, err := json.Marshal(c.root)
 	if err != nil {
-		return fmt.Errorf("Failed to marshall internal state: %s", err)
+		log.Printf("Failed to marshall internal state: %s", err)
+		return
 	}
 	if err = c.f.Truncate(0); err != nil {
-		return fmt.Errorf("Failed to truncate %s: %s", c.f.Name(), err)
+		log.Printf("Failed to truncate %s: %s", c.f.Name(), err)
+		return
 	}
 	if _, err = c.f.Write(data); err != nil {
-		return fmt.Errorf("Failed to write %s: %s", c.f.Name(), err)
+		log.Printf("Failed to write %s: %s", c.f.Name(), err)
+		return
 	}
-	return nil
-}
-
-func (c *cache) Close() {
-	c.f.Close()
-	c.f = nil
 }

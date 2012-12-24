@@ -40,8 +40,8 @@ type Node struct {
 type NodesTable interface {
 	http.Handler
 	AddEntry(node *Node, name string) error
-	// Temporary.
-	Root() string
+	// Enumerates all the entries in the table.
+	Enumerate(items chan<- TreeItem)
 }
 
 type nodesTable struct {
@@ -86,10 +86,6 @@ func LoadNodesTable(rootDir string, cas CasTable, l *log.Logger) (NodesTable, er
 		recentNodes:   map[string]*nodeCache{},
 		recentEntries: map[string]*entryCache{},
 	}, nil
-}
-
-func (n *nodesTable) Root() string {
-	return n.nodesDir
 }
 
 func (n *nodesTable) AddEntry(node *Node, name string) error {
@@ -141,6 +137,13 @@ func (n *nodesTable) AddEntry(node *Node, name string) error {
 		return fmt.Errorf("Failed to create tag %s: %s", tagPath, err)
 	}
 	return nil
+}
+
+// Enumerates all the entries in the table. If a file or directory is found in
+// the directory tree that doesn't match the expected format, it will be moved
+// into the trash.
+func (n *nodesTable) Enumerate(items chan<- TreeItem) {
+	EnumerateTree(n.nodesDir, items)
 }
 
 // Sadly, http.dirList is not exported. Also it doesn't sort the list by

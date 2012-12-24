@@ -124,11 +124,6 @@ func (c *casTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, casItem)
 }
 
-type Item struct {
-	Item  string
-	Error error
-}
-
 // Enumerates all the entries in the table. If a file or directory is found in
 // the directory tree that doesn't match the expected format, it will be moved
 // into the trash.

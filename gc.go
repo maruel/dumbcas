@@ -60,7 +60,7 @@ func gcMain(name string, l *log.Logger) error {
 
 	// Load all the nodes.
 	cT := make(chan TreeItem)
-	go EnumerateTree(nodes.Root(), cT)
+	go nodes.Enumerate(cT)
 	node := &Node{}
 	entry := &Entry{}
 	for {

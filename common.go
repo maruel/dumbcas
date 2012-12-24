@@ -71,6 +71,11 @@ func HandleCtrlC() {
 	signal.Notify(c, os.Interrupt)
 }
 
+type Item struct {
+	Item  string
+	Error error
+}
+
 type TreeItem struct {
 	FullPath string
 	os.FileInfo

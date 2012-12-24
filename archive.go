@@ -277,71 +277,16 @@ func archiveMain(stdout io.Writer, l *log.Logger, toArchiveArg string, loadCache
 	}
 
 	// Now the archival part. Create the basic directory structure.
-	nodes, err := LoadNodesTable(Root, cas)
+	nodes, err := LoadNodesTable(Root, cas, l)
 	if err != nil {
 		return err
 	}
-	nodesRoot := nodes.Root()
 	entrySha1, err := casArchive(stdout, l, entry, cas)
 	if err != nil {
 		return err
 	}
-	data, err := json.Marshal(&Node{Entry: entrySha1, Comment: archiveComment})
-	if err != nil {
-		return fmt.Errorf("Failed to marshall internal state: %s", err)
-	}
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		return fmt.Errorf("Failed to get the hostname: %s", err)
-	}
-	parts := strings.SplitN(hostname, ".", 2)
-	hostname = parts[0]
-
-	now := time.Now().UTC()
-	// Create one directory store per month.
-	monthName := now.Format("2006-01")
-	monthDir := path.Join(nodesRoot, monthName)
-	if err := os.MkdirAll(monthDir, 0750); err != nil && !os.IsExist(err) {
-		return fmt.Errorf("Failed to create %s: %s\n", monthDir, err)
-	}
-	suffix := 0
-	nodePath := ""
-	for {
-		nodeName := hostname + "_" + now.Format("2006-01-02_15-04-05") + "_" + path.Base(toArchive)
-		if suffix != 0 {
-			nodeName += fmt.Sprintf("(%d)", suffix)
-		}
-		nodePath = path.Join(monthDir, nodeName)
-		f, err := os.OpenFile(nodePath, os.O_WRONLY|os.O_EXCL|os.O_CREATE, 0640)
-		if err != nil {
-			// Try ad nauseam.
-			suffix += 1
-		} else {
-			if _, err = f.Write(data); err != nil {
-				return fmt.Errorf("Failed to write %s: %s", f.Name(), err)
-			}
-			l.Printf("Saved node: %s", path.Join(monthName, nodeName))
-			break
-		}
-	}
-
-	// Also update the tag by creating a symlink.
-	tagsDir := path.Join(nodesRoot, tagsName)
-	if err := os.MkdirAll(tagsDir, 0750); err != nil && !os.IsExist(err) {
-		return fmt.Errorf("Failed to create %s: %s\n", tagsDir, err)
-	}
-	tagPath := path.Join(tagsDir, path.Base(toArchive))
-	relPath, err := filepath.Rel(tagsDir, nodePath)
-	if err != nil {
-		return err
-	}
-	// Ignore error.
-	os.Remove(tagPath)
-	if err := os.Symlink(relPath, tagPath); err != nil {
-		return fmt.Errorf("Failed to create tag %s: %s", tagPath, err)
-	}
-	return nil
+	node := &Node{Entry: entrySha1, Comment: archiveComment}
+	return nodes.AddEntry(node, path.Base(toArchive))
 }
 
 var cmdArchive = &Command{

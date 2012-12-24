@@ -10,9 +10,11 @@ limitations under the License. */
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -37,14 +39,18 @@ type Node struct {
 
 type NodesTable interface {
 	http.Handler
+	AddEntry(node *Node, name string) error
 	// Temporary.
 	Root() string
 }
 
 type nodesTable struct {
-	nodesDir      string
-	cas           CasTable
-	maxItems      int
+	nodesDir string
+	cas      CasTable
+	maxItems int
+	hostname string
+	l        *log.Logger
+
 	mutex         sync.Mutex
 	recentNodes   map[string]*nodeCache
 	recentEntries map[string]*entryCache
@@ -60,15 +66,23 @@ type entryCache struct {
 	lastAccess time.Time
 }
 
-func LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
+func LoadNodesTable(rootDir string, cas CasTable, l *log.Logger) (NodesTable, error) {
 	nodesDir := path.Join(rootDir, nodesName)
 	if err := os.Mkdir(nodesDir, 0750); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("LoadNodesTable(%s): Failed to create %s: %s\n", rootDir, nodesDir, err)
 	}
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get the hostname: %s", err)
+	}
+	parts := strings.SplitN(hostname, ".", 2)
+	hostname = parts[0]
 	return &nodesTable{
 		nodesDir:      nodesDir,
 		cas:           cas,
 		maxItems:      10,
+		hostname:      hostname,
+		l:             l,
 		recentNodes:   map[string]*nodeCache{},
 		recentEntries: map[string]*entryCache{},
 	}, nil
@@ -76,6 +90,57 @@ func LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
 
 func (n *nodesTable) Root() string {
 	return n.nodesDir
+}
+
+func (n *nodesTable) AddEntry(node *Node, name string) error {
+	data, err := json.Marshal(node)
+	if err != nil {
+		return fmt.Errorf("Failed to marshall internal state: %s", err)
+	}
+	now := time.Now().UTC()
+	// Create one directory store per month.
+	monthName := now.Format("2006-01")
+	monthDir := path.Join(n.nodesDir, monthName)
+	if err := os.MkdirAll(monthDir, 0750); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("Failed to create %s: %s\n", monthDir, err)
+	}
+	suffix := 0
+	nodePath := ""
+	for {
+		nodeName := n.hostname + "_" + now.Format("2006-01-02_15-04-05") + "_" + name
+		if suffix != 0 {
+			nodeName += fmt.Sprintf("(%d)", suffix)
+		}
+		nodePath = path.Join(monthDir, nodeName)
+		f, err := os.OpenFile(nodePath, os.O_WRONLY|os.O_EXCL|os.O_CREATE, 0640)
+		if err != nil {
+			// Try ad nauseam.
+			suffix += 1
+		} else {
+			if _, err = f.Write(data); err != nil {
+				return fmt.Errorf("Failed to write %s: %s", f.Name(), err)
+			}
+			n.l.Printf("Saved node: %s", path.Join(monthName, nodeName))
+			break
+		}
+	}
+
+	// Also update the tag by creating a symlink.
+	tagsDir := path.Join(n.nodesDir, tagsName)
+	if err := os.MkdirAll(tagsDir, 0750); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("Failed to create %s: %s\n", tagsDir, err)
+	}
+	tagPath := path.Join(tagsDir, name)
+	relPath, err := filepath.Rel(tagsDir, nodePath)
+	if err != nil {
+		return err
+	}
+	// Ignore error.
+	os.Remove(tagPath)
+	if err := os.Symlink(relPath, tagPath); err != nil {
+		return fmt.Errorf("Failed to create tag %s: %s", tagPath, err)
+	}
+	return nil
 }
 
 // Sadly, http.dirList is not exported. Also it doesn't sort the list by

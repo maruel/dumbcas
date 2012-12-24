@@ -37,7 +37,7 @@ func gcMain(name string, l *log.Logger) error {
 		return err
 	}
 
-	nodes, err := LoadNodesTable(Root, cas)
+	nodes, err := LoadNodesTable(Root, cas, l)
 	if err != nil {
 		return err
 	}

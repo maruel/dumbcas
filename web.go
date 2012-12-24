@@ -96,7 +96,7 @@ func webMain(port int, ready chan<- net.Listener, l *log.Logger) error {
 		return err
 	}
 
-	nodes, err := LoadNodesTable(Root, cas)
+	nodes, err := LoadNodesTable(Root, cas, l)
 	// TODO(maruel): Add back.
 	//if !isDir(nodesDir) {
 	//	return fmt.Errorf("Please archive something first into %s", Root)

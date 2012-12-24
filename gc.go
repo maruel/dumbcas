@@ -39,7 +39,7 @@ func gcMain(name string) error {
 	}
 
 	nodesDir := path.Join(Root, NodesName)
-	trash := MakeTrash(Root)
+	//trash := MakeTrash(Root)
 	entries := map[string]bool{}
 
 	cI := make(chan Item)
@@ -48,10 +48,6 @@ func gcMain(name string) error {
 		item := <-cI
 		if item.Item != "" {
 			entries[item.Item] = false
-		} else if item.Invalid != "" {
-			log.Printf("Found invalid entry: %s", item.Invalid)
-			// Move it to trash right away.
-			trash.Move(item.Invalid)
 		} else if item.Error != nil {
 			cas.NeedFsck()
 			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)
@@ -104,9 +100,9 @@ func gcMain(name string) error {
 	}
 	log.Printf("Found %d orphan", len(orphans))
 	for _, orphan := range orphans {
-		if err := cas.Trash(orphan, trash); err != nil {
+		if err := cas.Remove(orphan); err != nil {
 			cas.NeedFsck()
-			return fmt.Errorf("Internal error while looking for %s: %s", orphan, err)
+			return fmt.Errorf("Internal error while removing %s: %s", orphan, err)
 		}
 	}
 	return nil

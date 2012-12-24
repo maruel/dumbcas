@@ -32,26 +32,30 @@ type casTable struct {
 	casDir       string
 	prefixLength int
 	validPath    *regexp.Regexp
+	trash        Trash
 }
 
 type CasTable interface {
+	// Serves the table over HTTP GET interface.
 	http.Handler
+	// Enumerates all the entries in the table.
 	Enumerate(items chan<- Item)
+	// Add an entry to the table.
 	AddEntry(source io.Reader, hash string) error
+	// Opens an entry for reading.
 	Open(hash string) (ReadSeekCloser, error)
+	// Removes an entry in the table.
+	Remove(item string) error
+	// Sets the bit that the table needs to be checked for consistency.
 	NeedFsck()
+	// Returns if the fsck bit is set.
 	WarnIfFsckIsNeeded() bool
-	Trash(item string, t *Trash) error
 }
 
 type ReadSeekCloser interface {
 	io.Reader
 	io.Seeker
 	io.Closer
-}
-
-func (c *casTable) relPath(hash string) string {
-	return path.Join(casName, hash[:c.prefixLength], hash[c.prefixLength:])
 }
 
 // Converts an entry in the table into a proper file path.
@@ -101,6 +105,7 @@ func MakeCasTable(rootDir string) (CasTable, error) {
 		casDir,
 		prefixLength,
 		regexp.MustCompile(fmt.Sprintf("^([a-f0-9]{%d})$", hashLength)),
+		MakeTrash(casDir),
 	}, nil
 }
 
@@ -120,12 +125,13 @@ func (c *casTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type Item struct {
-	Item    string
-	Invalid string
-	Error   error
+	Item  string
+	Error error
 }
 
-// Enumerates all the entries in the CAS.
+// Enumerates all the entries in the table. If a file or directory is found in
+// the directory tree that doesn't match the expected format, it will be moved
+// into the trash.
 func (c *casTable) Enumerate(items chan<- Item) {
 	rePrefix := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", c.prefixLength))
 	reRest := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", hashLength-c.prefixLength))
@@ -138,8 +144,11 @@ func (c *casTable) Enumerate(items chan<- Item) {
 	}
 
 	for _, prefix := range prefixes {
+		if prefix == trashName {
+			continue
+		}
 		if !rePrefix.MatchString(prefix) {
-			items <- Item{Invalid: path.Join(casName, prefix)}
+			c.trash.Move(prefix)
 			c.NeedFsck()
 			continue
 		}
@@ -153,7 +162,7 @@ func (c *casTable) Enumerate(items chan<- Item) {
 		}
 		for _, item := range subitems {
 			if !reRest.MatchString(item) {
-				items <- Item{Invalid: path.Join(casName, prefix, item)}
+				c.trash.Move(path.Join(prefix, item))
 				c.NeedFsck()
 				continue
 			}
@@ -206,9 +215,12 @@ func (c *casTable) WarnIfFsckIsNeeded() bool {
 	return true
 }
 
-func (c *casTable) Trash(item string, t *Trash) error {
-	itemPath := c.relPath(item)
-	return t.Move(itemPath)
+func (c *casTable) Remove(hash string) error {
+	match := c.validPath.FindStringSubmatch(hash)
+	if match == nil {
+		return fmt.Errorf("Remove(%s) is invalid", hash)
+	}
+	return c.trash.Move(path.Join(hash[:c.prefixLength], hash[c.prefixLength:]))
 }
 
 // Utility function when the data is already in memory but not yet hashed.

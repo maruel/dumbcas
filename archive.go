@@ -116,11 +116,11 @@ func readFileAsStrings(filepath string) ([]string, error) {
 // Calculates each entry. Assumes inputs is cleaned paths.
 func processWithCache(stdout io.Writer, inputs []string) (*Entry, error) {
 	log.Printf("processWithCache(%d)", len(inputs))
-	f, cache, err := loadCache()
+	cache, err := LoadCache()
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer cache.Close()
 
 	entryRoot := &Entry{}
 	// Throtttle after 128k entries per input.
@@ -159,7 +159,7 @@ func processWithCache(stdout io.Writer, inputs []string) (*Entry, error) {
 					display = "..." + display[len(display)-50:]
 				}
 				fmt.Fprintf(stdout, "%d files %1.1fmb Hashing %s...    \r", count, float64(size)/1024./1024., display)
-				cacheKey, key := RecursePath(cache, entryRoot, item.FullPath)
+				cacheKey, key := RecursePath(cache.Root(), entryRoot, item.FullPath)
 				if err = UpdateFile(cacheKey, key, item); err != nil {
 					return nil, err
 				}
@@ -174,7 +174,7 @@ func processWithCache(stdout io.Writer, inputs []string) (*Entry, error) {
 	}
 	fmt.Fprintf(stdout, "\n")
 	// Save the cache right away in case archival fails.
-	if err = saveCache(f, cache); err != nil {
+	if err = cache.Save(); err != nil {
 		return nil, err
 	}
 	if Stop {

@@ -30,12 +30,11 @@ func fsckMain() error {
 
 	// TODO(maruel): check nodes too!
 	//nodesDir := path.Join(Root, NodesName)
-	trash := MakeTrash(Root)
+	//trash := MakeTrash(Root)
 
 	c := make(chan Item)
 	count := 0
 	corrupted := 0
-	invalid := 0
 	go cas.Enumerate(c)
 	for {
 		item := <-c
@@ -53,22 +52,18 @@ func fsckMain() error {
 			}
 			if actual != item.Item {
 				corrupted += 1
-				log.Printf("Found invalid object, %s != %s", item.Item, actual)
-				if err := cas.Trash(item.Item, trash); err != nil {
+				log.Printf("Found corrupted object, %s != %s", item.Item, actual)
+				if err := cas.Remove(item.Item); err != nil {
 					return fmt.Errorf("Failed to trash object %s: %s", item.Item, err)
 				}
 			}
-		} else if item.Invalid != "" {
-			// Move it to trash right away.
-			invalid += 1
-			trash.Move(item.Invalid)
 		} else if item.Error != nil {
 			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)
 		} else {
 			break
 		}
 	}
-	log.Printf("Scanned %d entries; found %d corrupted, %d invalid.", count, corrupted, invalid)
+	log.Printf("Scanned %d entries; found %d corrupted, %d invalid.", count, corrupted)
 	return nil
 }
 

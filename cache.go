@@ -43,9 +43,6 @@ func (e *EntryCache) Print(w io.Writer, indent string) {
 }
 
 func (e *EntryCache) SortedFiles() []string {
-	if e.Files == nil {
-		return []string{}
-	}
 	out := make([]string, 0, len(e.Files))
 	for f, _ := range e.Files {
 		out = append(out, f)
@@ -54,61 +51,81 @@ func (e *EntryCache) SortedFiles() []string {
 	return out
 }
 
-func CountSizeCache(i *EntryCache) int {
+func (e *EntryCache) CountMembers() int {
 	countI := 1
-	for _, v := range i.Files {
-		countI += CountSizeCache(v)
+	for _, v := range e.Files {
+		countI += v.CountMembers()
 	}
 	return countI
 }
 
-func loadCache() (*os.File, *EntryCache, error) {
+type cache struct {
+	root *EntryCache
+	f    *os.File
+}
+
+type Cache interface {
+	Root() *EntryCache
+	Save() error
+	Close()
+}
+
+func LoadCache() (Cache, error) {
 	usr, err := user.Current()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	cacheDir := path.Join(usr.HomeDir, ".dumbcas")
 	if err := os.Mkdir(cacheDir, 0700); err != nil && !os.IsExist(err) {
-		return nil, nil, fmt.Errorf("Failed to access %s: %s", cacheDir, err)
+		return nil, fmt.Errorf("Failed to access %s: %s", cacheDir, err)
 	}
-	cache := &EntryCache{}
+	root := &EntryCache{}
 	cacheFile := path.Join(cacheDir, "cache.json")
 	f, err := os.OpenFile(cacheFile, os.O_CREATE|os.O_RDWR, 0600)
 	if f == nil {
-		return nil, nil, fmt.Errorf("Failed to access %s: %s", cacheFile, err)
+		return nil, fmt.Errorf("Failed to access %s: %s", cacheFile, err)
 	}
 	if data, err := ioutil.ReadAll(f); err == nil && len(data) != 0 {
-		if err = json.Unmarshal(data, &cache); err != nil {
+		if err = json.Unmarshal(data, &root); err != nil {
 			// Ignore unmarshaling failure.
-			cache = &EntryCache{}
+			root = &EntryCache{}
 		}
 	}
 	if _, err = f.Seek(0, 0); err != nil {
-		return nil, nil, fmt.Errorf("Failed to seek %s: %s", cacheFile, err)
+		return nil, fmt.Errorf("Failed to seek %s: %s", cacheFile, err)
 	}
-	log.Printf("Loaded %d entries from the cache.", CountSizeCache(cache)-1)
-	return f, cache, nil
+	log.Printf("Loaded %d entries from the cache.", root.CountMembers()-1)
+	return &cache{root, f}, nil
 }
 
-func saveCache(f *os.File, cache *EntryCache) error {
+func (c *cache) Root() *EntryCache {
+	return c.root
+}
+
+func (c *cache) Save() error {
 	// TODO(maruel): When testing, the entries shouldn't be saved in the cache.
 	// Trim anything > ~1yr old.
 	one_year := time.Now().Unix() - (365 * 24 * 60 * 60)
-	for relFile, file := range cache.Files {
+	for relFile, file := range c.root.Files {
 		if file.LastTested < one_year {
-			delete(cache.Files, relFile)
+			delete(c.root.Files, relFile)
 		}
 	}
-	log.Printf("Saving Cache: %d entries.", CountSizeCache(cache)-1)
-	data, err := json.Marshal(&cache)
+	log.Printf("Saving Cache: %d entries.", c.root.CountMembers()-1)
+	data, err := json.Marshal(c.root)
 	if err != nil {
 		return fmt.Errorf("Failed to marshall internal state: %s", err)
 	}
-	if err = f.Truncate(0); err != nil {
-		return fmt.Errorf("Failed to truncate %s: %s", f.Name(), err)
+	if err = c.f.Truncate(0); err != nil {
+		return fmt.Errorf("Failed to truncate %s: %s", c.f.Name(), err)
 	}
-	if _, err = f.Write(data); err != nil {
-		return fmt.Errorf("Failed to write %s: %s", f.Name(), err)
+	if _, err = c.f.Write(data); err != nil {
+		return fmt.Errorf("Failed to write %s: %s", c.f.Name(), err)
 	}
 	return nil
+}
+
+func (c *cache) Close() {
+	c.f.Close()
+	c.f = nil
 }

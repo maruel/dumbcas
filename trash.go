@@ -18,20 +18,25 @@ import (
 
 const trashName = "trash"
 
-type Trash struct {
+type trash struct {
 	rootDir  string
 	trashDir string
 	created  bool
 }
 
-func MakeTrash(rootDir string) *Trash {
+type Trash interface {
+	Move(relPath string) error
+}
+
+func MakeTrash(rootDir string) Trash {
 	if !path.IsAbs(rootDir) {
 		return nil
 	}
-	return &Trash{rootDir: rootDir, trashDir: path.Join(rootDir, trashName)}
+	return &trash{rootDir: rootDir, trashDir: path.Join(rootDir, trashName)}
 }
 
-func (t *Trash) Move(relPath string) error {
+func (t *trash) Move(relPath string) error {
+	log.Printf("Move(%s)", relPath)
 	if !t.created {
 		if err := os.Mkdir(t.trashDir, 0750); err != nil && !os.IsExist(err) {
 			return fmt.Errorf("Failed to create %s: %s", t.trashDir, err)
@@ -40,7 +45,6 @@ func (t *Trash) Move(relPath string) error {
 		}
 		t.created = true
 	}
-	log.Printf("Moving %s", path.Join(t.rootDir, relPath))
 	relDir := path.Dir(relPath)
 	if relDir != "." {
 		dir := path.Join(t.trashDir, relDir)

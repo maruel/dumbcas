@@ -10,11 +10,9 @@ limitations under the License. */
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"html"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -78,47 +76,6 @@ func LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
 
 func (n *nodesTable) Root() string {
 	return n.nodesDir
-}
-
-func loadReaderAsJson(r io.Reader, value interface{}) error {
-	data, err := ioutil.ReadAll(r)
-	if err == nil {
-		return json.Unmarshal(data, &value)
-	}
-	return err
-}
-
-func loadFileAsJson(filepath string, value interface{}) error {
-	f, err := os.Open(filepath)
-	if err != nil {
-		return fmt.Errorf("loadFileAsJson(%s): %s", filepath, err)
-	}
-	defer f.Close()
-	return loadReaderAsJson(f, value)
-}
-
-// Reads a directory list and guarantees to return a list.
-func readDirFancy(dirPath string) ([]string, error) {
-	names := []string{}
-	f, err := os.Open(dirPath)
-	if err != nil {
-		return names, err
-	}
-	defer f.Close()
-	for {
-		dirs, err := f.Readdir(1024)
-		if err != nil || len(dirs) == 0 {
-			break
-		}
-		for _, d := range dirs {
-			name := d.Name()
-			if d.IsDir() {
-				name += "/"
-			}
-			names = append(names, name)
-		}
-	}
-	return names, err
 }
 
 // Sadly, http.dirList is not exported. Also it doesn't sort the list by
@@ -299,7 +256,7 @@ func (n *nodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // Either failed to load a Node or an Entry.
-func (n *nodesTable) Corruption(w http.ResponseWriter, format string, a ...interface{}) {
+func (n *nodesTable) corruption(w http.ResponseWriter, format string, a ...interface{}) {
 	n.cas.NeedFsck()
 	str := fmt.Sprintf(format, a)
 	http.Error(w, "Internal failure: "+str, http.StatusNotImplemented)
@@ -310,7 +267,7 @@ func (n *nodesTable) Corruption(w http.ResponseWriter, format string, a ...inter
 func (n *nodesTable) serveObj(w http.ResponseWriter, r *http.Request, node *Node) {
 	entryFs, err := n.getEntry(node.Entry)
 	if err != nil {
-		n.Corruption(w, "Failed to load Entry %s: %s", node.Entry, err)
+		n.corruption(w, "Failed to load Entry %s: %s", node.Entry, err)
 		return
 	}
 	entryFs.ServeHTTP(w, r)

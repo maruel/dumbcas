@@ -12,10 +12,12 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/signal"
 	"path"
@@ -130,6 +132,30 @@ func readDirNames(dirPath string) ([]string, error) {
 	return f.Readdirnames(0)
 }
 
+// Reads a directory list and guarantees to return a list.
+func readDirFancy(dirPath string) ([]string, error) {
+	names := []string{}
+	f, err := os.Open(dirPath)
+	if err != nil {
+		return names, err
+	}
+	defer f.Close()
+	for {
+		dirs, err := f.Readdir(1024)
+		if err != nil || len(dirs) == 0 {
+			break
+		}
+		for _, d := range dirs {
+			name := d.Name()
+			if d.IsDir() {
+				name += "/"
+			}
+			names = append(names, name)
+		}
+	}
+	return names, err
+}
+
 func sha1File(f io.Reader) (string, error) {
 	hash := sha1.New()
 	if _, err := io.Copy(hash, f); err != nil {
@@ -157,4 +183,21 @@ func sha1String(content string) string {
 	hash := sha1.New()
 	io.WriteString(hash, content)
 	return hex.EncodeToString(hash.Sum(nil))
+}
+
+func loadReaderAsJson(r io.Reader, value interface{}) error {
+	data, err := ioutil.ReadAll(r)
+	if err == nil {
+		return json.Unmarshal(data, &value)
+	}
+	return err
+}
+
+func loadFileAsJson(filepath string, value interface{}) error {
+	f, err := os.Open(filepath)
+	if err != nil {
+		return fmt.Errorf("loadFileAsJson(%s): %s", filepath, err)
+	}
+	defer f.Close()
+	return loadReaderAsJson(f, value)
 }

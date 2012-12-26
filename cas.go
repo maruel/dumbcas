@@ -11,6 +11,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"fmt"
 	"io"
 	"log"
@@ -22,20 +23,17 @@ import (
 
 const casName = "cas"
 const needFsckName = "need_fsck"
-const hashLength = 40
 
 type CasEntry struct {
 	Item  string
 	Error error
 }
 
-// Creates 16^3 (4096) directories. Preferable values are 2 or 3.
-const splitAt = 3
-
 type casTable struct {
 	rootDir      string
 	casDir       string
 	prefixLength int
+	hashLength   int
 	validPath    *regexp.Regexp
 	trash        Trash
 }
@@ -87,12 +85,16 @@ func prefixSpace(prefixLength uint) int {
 
 func MakeCasTable(rootDir string) (CasTable, error) {
 	//log.Printf("MakeCasTable(%s)", rootDir)
+	// Creates 16^3 (4096) directories. Preferable values are 2 or 3.
+	prefixLength := 3
+	// Currently hardcoded for SHA-1 but could be used for any length.
+	hashLength := sha1.Size * 2
+
 	if !path.IsAbs(rootDir) {
 		return nil, fmt.Errorf("MakeCasTable(%s) is not valid", rootDir)
 	}
 	rootDir = path.Clean(rootDir)
 	casDir := path.Join(rootDir, casName)
-	prefixLength := splitAt
 	if err := os.Mkdir(casDir, 0750); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("MakeCasTable(%s): failed to create %s: %s", casDir, err)
 	} else if !os.IsExist(err) {
@@ -109,6 +111,7 @@ func MakeCasTable(rootDir string) (CasTable, error) {
 		rootDir,
 		casDir,
 		prefixLength,
+		hashLength,
 		regexp.MustCompile(fmt.Sprintf("^([a-f0-9]{%d})$", hashLength)),
 		MakeTrash(casDir),
 	}, nil
@@ -134,7 +137,7 @@ func (c *casTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // into the trash.
 func (c *casTable) Enumerate() <-chan CasEntry {
 	rePrefix := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", c.prefixLength))
-	reRest := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", hashLength-c.prefixLength))
+	reRest := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", c.hashLength-c.prefixLength))
 	items := make(chan CasEntry)
 
 	// TODO(maruel): No need to read all at once.

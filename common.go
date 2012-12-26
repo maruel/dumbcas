@@ -19,16 +19,12 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 )
 
 // Common flags.
 var Root string
-
-// If true, all processing should be stopped.
-var Stop bool
 
 func GetCommonFlags() flag.FlagSet {
 	flags := flag.FlagSet{}
@@ -62,15 +58,6 @@ func CommonFlag(createRoot bool, bypassFsck bool) (CasTable, error) {
 	return cas, nil
 }
 
-func HandleCtrlC() {
-	c := make(chan os.Signal)
-	go func() {
-		<-c
-		Stop = true
-	}()
-	signal.Notify(c, os.Interrupt)
-}
-
 type TreeItem struct {
 	FullPath string
 	os.FileInfo
@@ -85,7 +72,7 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) {
 	}
 	defer f.Close()
 	for {
-		if Stop {
+		if IsInterrupted() {
 			break
 		}
 		dirs, err := f.Readdir(1024)
@@ -97,7 +84,7 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) {
 			break
 		}
 		for _, d := range dirs {
-			if Stop {
+			if IsInterrupted() {
 				break
 			}
 			name := d.Name()

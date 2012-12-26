@@ -137,7 +137,7 @@ func processWithCache(stdout io.Writer, l *log.Logger, inputs []string, loadCach
 	size := int64(0)
 	for _, c := range channels {
 		for {
-			if Stop {
+			if IsInterrupted() {
 				break
 			}
 			item, ok := <-c
@@ -165,7 +165,7 @@ func processWithCache(stdout io.Writer, l *log.Logger, inputs []string, loadCach
 		}
 	}
 	fmt.Fprintf(stdout, "\n")
-	if Stop {
+	if IsInterrupted() {
 		return nil, errors.New("Ctrl-C'ed out")
 	}
 	return entryRoot, nil
@@ -180,7 +180,7 @@ type Stats struct {
 }
 
 func (s *Stats) recurseTree(itemPath string, entry *Entry, cas CasTable) error {
-	if Stop {
+	if IsInterrupted() {
 		return errors.New("Ctrl-C'ed out")
 	}
 	for relPath, file := range entry.Files {

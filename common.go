@@ -71,11 +71,6 @@ func HandleCtrlC() {
 	signal.Notify(c, os.Interrupt)
 }
 
-type Item struct {
-	Item  string
-	Error error
-}
-
 type TreeItem struct {
 	FullPath string
 	os.FileInfo
@@ -119,7 +114,7 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) {
 // Walk the directory tree.
 func EnumerateTree(rootDir string, c chan<- TreeItem) {
 	recurseEnumerateTree(rootDir, c)
-	c <- TreeItem{}
+	close(c)
 }
 
 func isDir(path string) bool {

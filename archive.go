@@ -119,48 +119,49 @@ func processWithCache(stdout io.Writer, l *log.Logger, inputs []string, loadCach
 	for i, input := range inputs {
 		stat, err := os.Stat(input)
 		if err != nil {
+			// TODO(maruel): Leaks the channels and the go routines.
 			return nil, err
 		}
 		if stat.IsDir() {
 			channels[i] = make(chan TreeItem, 128*1024)
 			go EnumerateTree(input, channels[i])
 		} else {
-			channels[i] = make(chan TreeItem, 2)
-			channels[i] <- TreeItem{FullPath: input, FileInfo: stat}
-			channels[i] <- TreeItem{}
+			channels[i] = make(chan TreeItem)
+			go func(c chan<- TreeItem, t *TreeItem) {
+				c <- *t
+				close(c)
+			}(channels[i], &TreeItem{FullPath: input, FileInfo: stat})
 		}
 	}
 	count := 0
 	size := int64(0)
 	for _, c := range channels {
-		if Stop {
-			break
-		}
 		for {
 			if Stop {
 				break
 			}
-			item := <-c
-			if item.FullPath != "" {
-				if item.FileInfo.IsDir() {
-					continue
-				}
-				display := item.FullPath
-				if len(display) > 50 {
-					display = "..." + display[len(display)-50:]
-				}
-				fmt.Fprintf(stdout, "%d files %1.1fmb Hashing %s...    \r", count, float64(size)/1024./1024., display)
-				cacheKey, key := RecursePath(cache.Root(), entryRoot, item.FullPath)
-				if err = UpdateFile(cacheKey, key, item); err != nil {
-					return nil, err
-				}
-				count += 1
-				size += item.FileInfo.Size()
-			} else if item.Error != nil {
-				return nil, item.Error
-			} else {
+			item, ok := <-c
+			if !ok {
 				break
 			}
+			if item.Error != nil {
+				// TODO(maruel): Leaks.
+				return nil, item.Error
+			}
+			if item.FileInfo.IsDir() {
+				continue
+			}
+			display := item.FullPath
+			if len(display) > 50 {
+				display = "..." + display[len(display)-50:]
+			}
+			fmt.Fprintf(stdout, "%d files %1.1fmb Hashing %s...    \r", count, float64(size)/1024./1024., display)
+			cacheKey, key := RecursePath(cache.Root(), entryRoot, item.FullPath)
+			if err = UpdateFile(cacheKey, key, item); err != nil {
+				return nil, err
+			}
+			count += 1
+			size += item.FileInfo.Size()
 		}
 	}
 	fmt.Fprintf(stdout, "\n")

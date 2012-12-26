@@ -16,7 +16,7 @@ import (
 	"path"
 )
 
-const trashName = "trash"
+const TrashName = "trash"
 
 type trash struct {
 	rootDir  string
@@ -32,7 +32,7 @@ func MakeTrash(rootDir string) Trash {
 	if !path.IsAbs(rootDir) {
 		return nil
 	}
-	return &trash{rootDir: rootDir, trashDir: path.Join(rootDir, trashName)}
+	return &trash{rootDir: rootDir, trashDir: path.Join(rootDir, TrashName)}
 }
 
 func (t *trash) Move(relPath string) error {

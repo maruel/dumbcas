@@ -43,54 +43,30 @@ func gcMain(name string, l *log.Logger) error {
 	}
 	entries := map[string]bool{}
 
-	cI := make(chan Item)
+	cI := make(chan CasEntry)
 	go cas.Enumerate(cI)
 	for {
-		item := <-cI
-		if item.Item != "" {
-			entries[item.Item] = false
-		} else if item.Error != nil {
-			cas.NeedFsck()
-			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)
-		} else {
+		item, ok := <-cI
+		if !ok {
 			break
 		}
+		if item.Error != nil {
+			// TODO(maruel): Leaks channel.
+			cas.NeedFsck()
+			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)
+		}
+		entries[item.Item] = false
 	}
 	l.Printf("Found %d entries", len(entries))
 
 	// Load all the nodes.
-	cT := make(chan TreeItem)
-	go nodes.Enumerate(cT)
-	node := &Node{}
-	entry := &Entry{}
-	for {
-		item := <-cT
-		if item.FullPath != "" {
-			if item.FileInfo.IsDir() {
-				continue
-			}
-			if err := loadFileAsJson(item.FullPath, &node); err != nil {
-				cas.NeedFsck()
-				return fmt.Errorf("Failed reading %s", item.FullPath)
-			}
-			f, err := cas.Open(node.Entry)
-			if err != nil {
-				cas.NeedFsck()
-				return fmt.Errorf("Invalid entry name: %s", node.Entry)
-			}
-			defer f.Close()
-			if err := loadReaderAsJson(f, &entry); err != nil {
-				cas.NeedFsck()
-				return fmt.Errorf("Failed reading entry %s", node.Entry)
-			}
-			entries[node.Entry] = true
-			TagRecurse(entries, entry)
-		} else if item.Error != nil {
-			cas.NeedFsck()
-			return fmt.Errorf("Failed enumerating the Node table %s", item.Error)
-		} else {
-			break
+	for item := range nodes.Enumerate() {
+		if item.Error != nil {
+			// TODO(maruel): Leaks channel.
+			return item.Error
 		}
+		entries[item.Node.Entry] = true
+		TagRecurse(entries, item.Entry)
 	}
 
 	orphans := []string{}

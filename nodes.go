@@ -37,11 +37,18 @@ type Node struct {
 	Comment string `json:",omitempty"`
 }
 
+type NodeEntry struct {
+	Path  string
+	Node  *Node
+	Entry *Entry
+	Error error
+}
+
 type NodesTable interface {
 	http.Handler
 	AddEntry(node *Node, name string) error
 	// Enumerates all the entries in the table.
-	Enumerate(items chan<- TreeItem)
+	Enumerate() <-chan NodeEntry
 }
 
 type nodesTable struct {
@@ -50,6 +57,7 @@ type nodesTable struct {
 	maxItems int
 	hostname string
 	l        *log.Logger
+	trash    Trash
 
 	mutex         sync.Mutex
 	recentNodes   map[string]*nodeCache
@@ -83,6 +91,7 @@ func LoadNodesTable(rootDir string, cas CasTable, l *log.Logger) (NodesTable, er
 		maxItems:      10,
 		hostname:      hostname,
 		l:             l,
+		trash:         MakeTrash(nodesDir),
 		recentNodes:   map[string]*nodeCache{},
 		recentEntries: map[string]*entryCache{},
 	}, nil
@@ -142,8 +151,49 @@ func (n *nodesTable) AddEntry(node *Node, name string) error {
 // Enumerates all the entries in the table. If a file or directory is found in
 // the directory tree that doesn't match the expected format, it will be moved
 // into the trash.
-func (n *nodesTable) Enumerate(items chan<- TreeItem) {
-	EnumerateTree(n.nodesDir, items)
+func (n *nodesTable) Enumerate() <-chan NodeEntry {
+	items := make(chan NodeEntry)
+	c := make(chan TreeItem)
+	go EnumerateTree(n.nodesDir, c)
+	go func() {
+		for v := range c {
+			if v.Error != nil {
+				items <- NodeEntry{Error: v.Error}
+				continue
+			}
+			if v.FileInfo.IsDir() {
+				continue
+			}
+			relPath := v.FullPath
+			if path.Base(relPath) == TrashName {
+				// TODO(maruel): Cancel iterating inside.
+				continue
+			}
+			node := &Node{}
+			if err := loadFileAsJson(v.FullPath, node); err != nil {
+				n.trash.Move(relPath)
+				n.cas.NeedFsck()
+				items <- NodeEntry{Error: fmt.Errorf("Failed reading %s", relPath)}
+				continue
+			}
+			f, err := n.cas.Open(node.Entry)
+			if err != nil {
+				n.cas.NeedFsck()
+				items <- NodeEntry{Error: fmt.Errorf("Invalid entry name: %s", node.Entry)}
+				continue
+			}
+			defer f.Close()
+			entry := &Entry{}
+			if err := loadReaderAsJson(f, entry); err != nil {
+				n.cas.NeedFsck()
+				items <- NodeEntry{Error: fmt.Errorf("Failed reading entry %s", node.Entry)}
+				continue
+			}
+			items <- NodeEntry{Path: relPath, Node: node, Entry: entry}
+		}
+		close(items)
+	}()
+	return items
 }
 
 // Sadly, http.dirList is not exported. Also it doesn't sort the list by

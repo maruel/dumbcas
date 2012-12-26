@@ -24,6 +24,11 @@ const casName = "cas"
 const needFsckName = "need_fsck"
 const hashLength = 40
 
+type CasEntry struct {
+	Item  string
+	Error error
+}
+
 // Creates 16^3 (4096) directories. Preferable values are 2 or 3.
 const splitAt = 3
 
@@ -39,7 +44,7 @@ type CasTable interface {
 	// Serves the table over HTTP GET interface.
 	http.Handler
 	// Enumerates all the entries in the table.
-	Enumerate(items chan<- Item)
+	Enumerate(items chan<- CasEntry)
 	// Add an entry to the table.
 	AddEntry(source io.Reader, hash string) error
 	// Opens an entry for reading.
@@ -127,44 +132,43 @@ func (c *casTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Enumerates all the entries in the table. If a file or directory is found in
 // the directory tree that doesn't match the expected format, it will be moved
 // into the trash.
-func (c *casTable) Enumerate(items chan<- Item) {
+func (c *casTable) Enumerate(items chan<- CasEntry) {
 	rePrefix := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", c.prefixLength))
 	reRest := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", hashLength-c.prefixLength))
 
 	// TODO(maruel): No need to read all at once.
 	prefixes, err := readDirNames(c.casDir)
 	if err != nil {
-		items <- Item{Error: fmt.Errorf("Failed reading ss", c.casDir)}
-		return
-	}
-
-	for _, prefix := range prefixes {
-		if prefix == trashName {
-			continue
-		}
-		if !rePrefix.MatchString(prefix) {
-			c.trash.Move(prefix)
-			c.NeedFsck()
-			continue
-		}
-		// TODO(maruel): No need to read all at once.
-		prefixPath := path.Join(c.casDir, prefix)
-		subitems, err := readDirNames(prefixPath)
-		if err != nil {
-			items <- Item{Error: fmt.Errorf("Failed reading %s", prefixPath)}
-			c.NeedFsck()
-			continue
-		}
-		for _, item := range subitems {
-			if !reRest.MatchString(item) {
-				c.trash.Move(path.Join(prefix, item))
+		items <- CasEntry{Error: fmt.Errorf("Failed reading ss", c.casDir)}
+	} else {
+		for _, prefix := range prefixes {
+			if prefix == TrashName {
+				continue
+			}
+			if !rePrefix.MatchString(prefix) {
+				c.trash.Move(prefix)
 				c.NeedFsck()
 				continue
 			}
-			items <- Item{Item: prefix + item}
+			// TODO(maruel): No need to read all at once.
+			prefixPath := path.Join(c.casDir, prefix)
+			subitems, err := readDirNames(prefixPath)
+			if err != nil {
+				items <- CasEntry{Error: fmt.Errorf("Failed reading %s", prefixPath)}
+				c.NeedFsck()
+				continue
+			}
+			for _, item := range subitems {
+				if !reRest.MatchString(item) {
+					c.trash.Move(path.Join(prefix, item))
+					c.NeedFsck()
+					continue
+				}
+				items <- CasEntry{Item: prefix + item}
+			}
 		}
 	}
-	items <- Item{}
+	close(items)
 }
 
 // Adds an entry with the hash calculated already if not alreaady present. It's

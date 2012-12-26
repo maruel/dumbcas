@@ -32,35 +32,39 @@ func fsckMain(l *log.Logger) error {
 	//nodesDir := path.Join(Root, NodesName)
 	//trash := MakeTrash(Root)
 
-	c := make(chan Item)
+	c := make(chan CasEntry)
 	count := 0
 	corrupted := 0
 	go cas.Enumerate(c)
 	for {
-		item := <-c
-		if item.Item != "" {
-			count += 1
-			f, err := cas.Open(item.Item)
-			if err != nil {
-				return fmt.Errorf("Failed to open %s: %s", item.Item, err)
-			}
-			defer f.Close()
-			actual, err := sha1File(f)
-			if err != nil {
-				// Probably Disk error.
-				return fmt.Errorf("Aborting! Failed to sha1 %s: %s", item.Item, err)
-			}
-			if actual != item.Item {
-				corrupted += 1
-				l.Printf("Found corrupted object, %s != %s", item.Item, actual)
-				if err := cas.Remove(item.Item); err != nil {
-					return fmt.Errorf("Failed to trash object %s: %s", item.Item, err)
-				}
-			}
-		} else if item.Error != nil {
-			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)
-		} else {
+		item, ok := <-c
+		if !ok {
 			break
+		}
+		if item.Error != nil {
+			// TODO(maruel): Leaks channel.
+			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)
+		}
+		count += 1
+		f, err := cas.Open(item.Item)
+		if err != nil {
+			// TODO(maruel): Leaks channel.
+			return fmt.Errorf("Failed to open %s: %s", item.Item, err)
+		}
+		defer f.Close()
+		actual, err := sha1File(f)
+		if err != nil {
+			// Probably Disk error.
+			// TODO(maruel): Leaks channel.
+			return fmt.Errorf("Aborting! Failed to sha1 %s: %s", item.Item, err)
+		}
+		if actual != item.Item {
+			corrupted += 1
+			l.Printf("Found corrupted object, %s != %s", item.Item, actual)
+			if err := cas.Remove(item.Item); err != nil {
+				// TODO(maruel): Leaks channel.
+				return fmt.Errorf("Failed to trash object %s: %s", item.Item, err)
+			}
 		}
 	}
 	l.Printf("Scanned %d entries; found %d corrupted, %d invalid.", count, corrupted)

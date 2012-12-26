@@ -21,21 +21,36 @@ var interrupted int32
 // Continuously sends true once Ctrl-C was intercepted.
 var InterruptedChannel <-chan bool
 
+// The private one to send to.
+var interruptedChannel chan<- bool
+
+func init() {
+	c := make(chan bool)
+	interruptedChannel = c
+	InterruptedChannel = c
+}
+
 // Initialize an handler to handle SIGINT, which is normally sent on Ctrl-C.
 func HandleCtrlC() {
 	chanSignal := make(chan os.Signal)
-	chanStop := make(chan bool)
-	InterruptedChannel = chanStop
 
 	go func() {
 		<-chanSignal
-		atomic.StoreInt32(&interrupted, 1)
-		for {
-			chanStop <- true
-		}
+		Interrupt()
 	}()
 
 	signal.Notify(chanSignal, os.Interrupt)
+}
+
+// Simulates an interrupt signal. Can be used to stop background processing
+// when an error occured and the process should terminates cleanly.
+func Interrupt() {
+	atomic.StoreInt32(&interrupted, 1)
+	go func() {
+		for {
+			interruptedChannel <- true
+		}
+	}()
 }
 
 // Returns true once an interrupt signal was received.

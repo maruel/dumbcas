@@ -144,6 +144,9 @@ func (c *casTable) Enumerate() <-chan CasEntry {
 			items <- CasEntry{Error: fmt.Errorf("Failed reading ss", c.casDir)}
 		} else {
 			for _, prefix := range prefixes {
+				if IsInterrupted() {
+					break
+				}
 				if prefix == TrashName {
 					continue
 				}

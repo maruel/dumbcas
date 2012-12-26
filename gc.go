@@ -42,14 +42,7 @@ func gcMain(name string, l *log.Logger) error {
 		return err
 	}
 	entries := map[string]bool{}
-
-	cI := make(chan CasEntry)
-	go cas.Enumerate(cI)
-	for {
-		item, ok := <-cI
-		if !ok {
-			break
-		}
+	for item := range cas.Enumerate() {
 		if item.Error != nil {
 			// TODO(maruel): Leaks channel.
 			cas.NeedFsck()

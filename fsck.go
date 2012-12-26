@@ -29,18 +29,9 @@ func fsckMain(l *log.Logger) error {
 	}
 
 	// TODO(maruel): check nodes too!
-	//nodesDir := path.Join(Root, NodesName)
-	//trash := MakeTrash(Root)
-
-	c := make(chan CasEntry)
 	count := 0
 	corrupted := 0
-	go cas.Enumerate(c)
-	for {
-		item, ok := <-c
-		if !ok {
-			break
-		}
+	for item := range cas.Enumerate() {
 		if item.Error != nil {
 			// TODO(maruel): Leaks channel.
 			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)

@@ -102,9 +102,13 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) bool {
 }
 
 // Walk the directory tree.
-func EnumerateTree(rootDir string, c chan<- TreeItem) {
-	recurseEnumerateTree(rootDir, c)
-	close(c)
+func EnumerateTree(rootDir string) <-chan TreeItem {
+	c := make(chan TreeItem)
+	go func() {
+		recurseEnumerateTree(rootDir, c)
+		close(c)
+	}()
+	return c
 }
 
 func isDir(path string) bool {

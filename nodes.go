@@ -153,8 +153,7 @@ func (n *nodesTable) AddEntry(node *Node, name string) error {
 // into the trash.
 func (n *nodesTable) Enumerate() <-chan NodeEntry {
 	items := make(chan NodeEntry)
-	c := make(chan TreeItem)
-	go EnumerateTree(n.nodesDir, c)
+	c := EnumerateTree(n.nodesDir)
 	go func() {
 		for {
 			select {

@@ -115,7 +115,7 @@ func processWithCache(stdout io.Writer, l *log.Logger, inputs []string, loadCach
 
 	entryRoot := &Entry{}
 	// Throtttle after 128k entries per input.
-	channels := make([]chan TreeItem, len(inputs))
+	channels := make([]<-chan TreeItem, len(inputs))
 	for i, input := range inputs {
 		stat, err := os.Stat(input)
 		if err != nil {
@@ -123,14 +123,12 @@ func processWithCache(stdout io.Writer, l *log.Logger, inputs []string, loadCach
 			return nil, err
 		}
 		if stat.IsDir() {
-			channels[i] = make(chan TreeItem, 128*1024)
-			go EnumerateTree(input, channels[i])
+			channels[i] = EnumerateTree(input)
 		} else {
-			channels[i] = make(chan TreeItem)
-			go func(c chan<- TreeItem, t *TreeItem) {
-				c <- *t
-				close(c)
-			}(channels[i], &TreeItem{FullPath: input, FileInfo: stat})
+			c := make(chan TreeItem, 1)
+			channels[i] = c
+			c <- TreeItem{FullPath: input, FileInfo: stat}
+			close(c)
 		}
 	}
 	count := 0

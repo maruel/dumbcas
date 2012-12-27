@@ -16,32 +16,31 @@ import (
 type cacheMock struct {
 	root   *EntryCache
 	closed bool
-	t      *testing.T
 }
 
 func (c *cacheMock) Root() *EntryCache {
 	if c.closed == true {
-		c.t.Fail()
+		panic("Oops")
 	}
 	return c.root
 }
 
 func (c *cacheMock) Close() {
 	if c.closed == true {
-		c.t.Fail()
+		panic("Oops")
 	}
 	c.closed = true
 }
 
-func MockCache(t *testing.T) func() (Cache, error) {
-	return func() (Cache, error) {
-		return &cacheMock{&EntryCache{}, false, t}, nil
+func init() {
+	LoadCache = func() (Cache, error) {
+		return &cacheMock{&EntryCache{}, false}, nil
 	}
 }
 
 func TestCache(t *testing.T) {
 	t.Parallel()
-	cache, err := LoadCache()
+	cache, err := loadCache()
 	if err != nil {
 		t.Fatal(err)
 	}

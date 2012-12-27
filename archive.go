@@ -105,9 +105,9 @@ func readFileAsStrings(filepath string) ([]string, error) {
 }
 
 // Calculates each entry. Assumes inputs is cleaned paths.
-func processWithCache(stdout io.Writer, l *log.Logger, inputs []string, loadCache func() (Cache, error)) (*Entry, error) {
+func processWithCache(stdout io.Writer, l *log.Logger, inputs []string) (*Entry, error) {
 	l.Printf("processWithCache(%d)", len(inputs))
-	cache, err := loadCache()
+	cache, err := LoadCache()
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,7 @@ func cleanupList(relDir string, inputs []string) {
 	}
 }
 
-func archiveMain(stdout io.Writer, l *log.Logger, toArchiveArg string, loadCache func() (Cache, error)) error {
+func archiveMain(stdout io.Writer, l *log.Logger, toArchiveArg string) error {
 	cas, err := CommonFlag(true, true)
 	if err != nil {
 		return err
@@ -270,7 +270,7 @@ func archiveMain(stdout io.Writer, l *log.Logger, toArchiveArg string, loadCache
 	inputs = append(inputs, toArchive)
 	l.Printf("Found %d entries to backup in %s", len(inputs), toArchive)
 	cleanupList(path.Dir(toArchive), inputs)
-	entry, err := processWithCache(stdout, l, inputs, loadCache)
+	entry, err := processWithCache(stdout, l, inputs)
 	if err != nil {
 		return err
 	}
@@ -309,7 +309,7 @@ func runArchive(a *Application, cmd *Command, args []string) int {
 		return 1
 	}
 	HandleCtrlC()
-	if err := archiveMain(a.Out, a.Log, args[0], LoadCache); err != nil {
+	if err := archiveMain(a.Out, a.Log, args[0]); err != nil {
 		fmt.Fprintf(a.Err, "%s: %s\n", a.Name, err)
 		return 1
 	}

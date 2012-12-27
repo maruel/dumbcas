@@ -70,9 +70,11 @@ type Cache interface {
 	Close()
 }
 
+var LoadCache func() (Cache, error) = loadCache
+
 // Loads the cache from ~/.dumbcas/cache.json and keeps it open until the call
 // to Save().
-func LoadCache() (Cache, error) {
+func loadCache() (Cache, error) {
 	usr, err := user.Current()
 	if err != nil {
 		return nil, err

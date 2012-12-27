@@ -385,7 +385,7 @@ func (n *nodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Either failed to load a Node or an Entry.
 func (n *nodesTable) corruption(w http.ResponseWriter, format string, a ...interface{}) {
 	n.cas.NeedFsck()
-	str := fmt.Sprintf(format, a)
+	str := fmt.Sprintf(format, a...)
 	http.Error(w, "Internal failure: "+str, http.StatusNotImplemented)
 }
 

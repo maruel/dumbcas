@@ -10,8 +10,10 @@ limitations under the License. */
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"testing"
 )
@@ -21,26 +23,61 @@ type mockCasTable struct {
 	needFsck bool
 }
 
-func MakeMockCasTable() (CasTable, error) {
-	return &mockCasTable{}, nil
+func MakeMockCasTable(rootDir string) (CasTable, error) {
+	return &mockCasTable{entries: make(map[string][]byte)}, nil
+}
+
+func init() {
+	// TODO(maruel): Once it works.
+	//MakeCasTable = MakeMockCasTable
 }
 
 func (m *mockCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Write(m.entries[r.URL.Path[1:]])
 }
 
 func (m *mockCasTable) Enumerate() <-chan CasEntry {
-	return nil
+	keys := make([]string, 0, len(m.entries))
+	for k, _ := range m.entries {
+		keys = append(keys, k)
+	}
+	c := make(chan CasEntry)
+	go func() {
+		for _, k := range keys {
+			c <- CasEntry{Item: k}
+		}
+		close(c)
+	}()
+	return c
 }
 
 func (m *mockCasTable) AddEntry(source io.Reader, hash string) error {
-	return nil
+	data, err := ioutil.ReadAll(source)
+	if err == nil {
+		m.entries[hash] = data
+	}
+	return err
 }
 
 func (m *mockCasTable) Open(hash string) (ReadSeekCloser, error) {
-	return nil, nil
+	data, ok := m.entries[hash]
+	if !ok {
+		return nil, fmt.Errorf("Missing: %s", hash)
+	}
+	return Buffer{bytes.NewReader(data)}, nil
+}
+
+// Adds noop Close() to a bytes.Reader.
+type Buffer struct {
+	*bytes.Reader
+}
+
+func (b Buffer) Close() error {
+	return nil
 }
 
 func (m *mockCasTable) Remove(item string) error {
+	delete(m.entries, item)
 	return nil
 }
 

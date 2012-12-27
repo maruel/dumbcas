@@ -156,40 +156,50 @@ func (n *nodesTable) Enumerate() <-chan NodeEntry {
 	c := make(chan TreeItem)
 	go EnumerateTree(n.nodesDir, c)
 	go func() {
-		for v := range c {
-			if v.Error != nil {
-				items <- NodeEntry{Error: v.Error}
-				continue
+		for {
+			select {
+			case <-InterruptedChannel:
+				close(items)
+				return
+			case v, ok := <-c:
+				if !ok {
+					close(items)
+					return
+				}
+				if v.Error != nil {
+					items <- NodeEntry{Error: v.Error}
+					continue
+				}
+				if v.FileInfo.IsDir() {
+					continue
+				}
+				relPath := v.FullPath
+				if path.Base(relPath) == TrashName {
+					// TODO(maruel): Cancel iterating inside the directory!
+					continue
+				}
+				node := &Node{}
+				if err := loadFileAsJson(v.FullPath, node); err != nil {
+					n.trash.Move(relPath)
+					n.cas.NeedFsck()
+					items <- NodeEntry{Error: fmt.Errorf("Failed reading %s", relPath)}
+					continue
+				}
+				f, err := n.cas.Open(node.Entry)
+				if err != nil {
+					n.cas.NeedFsck()
+					items <- NodeEntry{Error: fmt.Errorf("Invalid entry name: %s", node.Entry)}
+					continue
+				}
+				defer f.Close()
+				entry := &Entry{}
+				if err := loadReaderAsJson(f, entry); err != nil {
+					n.cas.NeedFsck()
+					items <- NodeEntry{Error: fmt.Errorf("Failed reading entry %s", node.Entry)}
+					continue
+				}
+				items <- NodeEntry{Path: relPath, Node: node, Entry: entry}
 			}
-			if v.FileInfo.IsDir() {
-				continue
-			}
-			relPath := v.FullPath
-			if path.Base(relPath) == TrashName {
-				// TODO(maruel): Cancel iterating inside.
-				continue
-			}
-			node := &Node{}
-			if err := loadFileAsJson(v.FullPath, node); err != nil {
-				n.trash.Move(relPath)
-				n.cas.NeedFsck()
-				items <- NodeEntry{Error: fmt.Errorf("Failed reading %s", relPath)}
-				continue
-			}
-			f, err := n.cas.Open(node.Entry)
-			if err != nil {
-				n.cas.NeedFsck()
-				items <- NodeEntry{Error: fmt.Errorf("Invalid entry name: %s", node.Entry)}
-				continue
-			}
-			defer f.Close()
-			entry := &Entry{}
-			if err := loadReaderAsJson(f, entry); err != nil {
-				n.cas.NeedFsck()
-				items <- NodeEntry{Error: fmt.Errorf("Failed reading entry %s", node.Entry)}
-				continue
-			}
-			items <- NodeEntry{Path: relPath, Node: node, Entry: entry}
 		}
 		close(items)
 	}()

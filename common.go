@@ -64,11 +64,11 @@ type TreeItem struct {
 	Error error
 }
 
-func recurseEnumerateTree(rootDir string, c chan<- TreeItem) {
+func recurseEnumerateTree(rootDir string, c chan<- TreeItem) bool {
 	f, err := os.Open(rootDir)
 	if err != nil {
 		c <- TreeItem{Error: err}
-		return
+		return false
 	}
 	defer f.Close()
 	for {
@@ -78,7 +78,7 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) {
 		dirs, err := f.Readdir(1024)
 		if err != nil && err != io.EOF {
 			c <- TreeItem{Error: err}
-			return
+			return false
 		}
 		if len(dirs) == 0 {
 			break
@@ -90,12 +90,15 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) {
 			name := d.Name()
 			fullPath := path.Join(rootDir, name)
 			if d.IsDir() {
-				recurseEnumerateTree(fullPath, c)
+				if !recurseEnumerateTree(fullPath, c) {
+					return false
+				}
 			} else {
 				c <- TreeItem{FullPath: fullPath, FileInfo: d}
 			}
 		}
 	}
+	return true
 }
 
 // Walk the directory tree.

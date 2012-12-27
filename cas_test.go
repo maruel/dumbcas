@@ -11,8 +11,46 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"testing"
 )
+
+type mockCasTable struct {
+	entries  map[string][]byte
+	needFsck bool
+}
+
+func MakeMockCasTable() (CasTable, error) {
+	return &mockCasTable{}, nil
+}
+
+func (m *mockCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+}
+
+func (m *mockCasTable) Enumerate() <-chan CasEntry {
+	return nil
+}
+
+func (m *mockCasTable) AddEntry(source io.Reader, hash string) error {
+	return nil
+}
+
+func (m *mockCasTable) Open(hash string) (ReadSeekCloser, error) {
+	return nil, nil
+}
+
+func (m *mockCasTable) Remove(item string) error {
+	return nil
+}
+
+func (m *mockCasTable) NeedFsck() {
+	m.needFsck = true
+}
+
+func (m *mockCasTable) WarnIfFsckIsNeeded() bool {
+	return m.needFsck
+}
 
 func TestPrefixSpace(t *testing.T) {
 	t.Parallel()

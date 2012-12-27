@@ -61,6 +61,8 @@ type ReadSeekCloser interface {
 	io.Closer
 }
 
+var MakeCasTable func(rootDir string) (CasTable, error) = makeCasTable
+
 // Converts an entry in the table into a proper file path.
 func (c *casTable) filePath(hash string) string {
 	match := c.validPath.FindStringSubmatch(hash)
@@ -83,8 +85,8 @@ func prefixSpace(prefixLength uint) int {
 	return 1 << (prefixLength * 4)
 }
 
-func MakeCasTable(rootDir string) (CasTable, error) {
-	//log.Printf("MakeCasTable(%s)", rootDir)
+func makeCasTable(rootDir string) (CasTable, error) {
+	//log.Printf("makeCasTable(%s)", rootDir)
 	// Creates 16^3 (4096) directories. Preferable values are 2 or 3.
 	prefixLength := 3
 	// Currently hardcoded for SHA-1 but could be used for any length.

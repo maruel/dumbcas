@@ -115,7 +115,7 @@ Use "{{.GetName}} help [command]" for more information about a command.
 	tmpl(out, usageTemplate, a)
 }
 
-func getCommandUsageHandler(out io.Writer, a Application, cmd Command) func() {
+func getCommandUsageHandler(out io.Writer, a Application, cmd Command, helpUsed *bool) func() {
 	return func() {
 		helpTemplate := "{{.Cmd.GetLongDesc | trim | wrapWithLines}}usage:  {{.App.GetName}} {{.Cmd.GetUsageLine}}\n"
 		dict := struct {
@@ -124,13 +124,14 @@ func getCommandUsageHandler(out io.Writer, a Application, cmd Command) func() {
 		}{a, cmd}
 		tmpl(out, helpTemplate, dict)
 		cmd.GetFlags().PrintDefaults()
+		*helpUsed = true
 	}
 }
 
 // Initialize commands.
-func initCommands(a Application, out io.Writer) {
+func initCommands(a Application, out io.Writer, helpUsed *bool) {
 	for _, cmd := range a.GetCommands() {
-		cmd.GetFlags().Usage = getCommandUsageHandler(out, a, cmd)
+		cmd.GetFlags().Usage = getCommandUsageHandler(out, a, cmd, helpUsed)
 		cmd.GetFlags().SetOutput(out)
 		cmd.GetFlags().Init(cmd.GetName(), flag.ContinueOnError)
 	}
@@ -138,11 +139,13 @@ func initCommands(a Application, out io.Writer) {
 
 // Runs the application, scheduling the subcommand.
 func Run(a Application, args []string) int {
-	initCommands(a, a.GetErr())
+	var helpUsed bool
+	initCommands(a, a.GetErr(), &helpUsed)
 
 	// Process general flags first, mainly for -help.
 	flag.Usage = func() {
 		usage(a.GetErr(), a)
+		helpUsed = true
 	}
 
 	// Defaults; do not parse during unit tests because flag.commandLine.errorHandling == ExitOnError. :(
@@ -160,6 +163,9 @@ func Run(a Application, args []string) int {
 	for _, cmd := range a.GetCommands() {
 		if cmd.GetName() == args[0] {
 			cmd.GetFlags().Parse(args[1:])
+			if helpUsed {
+				return 0
+			}
 			return cmd.Run(a, cmd.GetFlags().Args())
 		}
 	}
@@ -207,7 +213,8 @@ func (c *help) Run(a Application, args []string) int {
 		return 2
 	}
 	// Redirects all output to Out.
-	initCommands(a, a.GetOut())
+	var helpUsed bool
+	initCommands(a, a.GetOut(), &helpUsed)
 
 	for _, cmdFound := range a.GetCommands() {
 		if cmdFound.GetName() == args[0] {

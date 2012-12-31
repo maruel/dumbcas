@@ -31,9 +31,13 @@ import (
 // Logging is a global object so it can't be checked for when tests are run in parallel.
 var bufLog bytes.Buffer
 
+var enableOutput = false
+
 func init() {
 	// Reduces output. Comment out to get more logs.
-	log.SetOutput(&bufLog)
+	if !enableOutput {
+		log.SetOutput(&bufLog)
+	}
 	log.SetFlags(log.Lmicroseconds)
 }
 
@@ -121,6 +125,13 @@ func (a *ApplicationMock) GetLog() *log.Logger {
 	return a.log
 }
 
+func (a *ApplicationMock) Run(args []string, expected int) {
+	a.GetLog().Printf("%s", args)
+	if returncode := Run(a, args); returncode != expected {
+		a.Fatal("Unexpected return code", returncode)
+	}
+}
+
 type CommandMock struct {
 	Command
 	flags flag.FlagSet
@@ -136,7 +147,15 @@ func makeMock(t *testing.T) *ApplicationMock {
 		testing.T:          t,
 		closed:             make(chan bool),
 	}
-	a.log = log.New(&a.bufLog, "", 0)
+	if !enableOutput {
+		// Send the log to the test-specific buffer.
+		a.log = log.New(&a.bufLog, "", log.Lmicroseconds)
+	} else {
+		// Send directly to output for test debugging.
+		a.log = log.New(os.Stderr, "", log.Lmicroseconds)
+	}
+	// Uncomment to send the log to the general buffer.
+	//a.log = log.New(&bufLog, "", log.Lmicroseconds)
 	for i, c := range a.Commands {
 		a.Commands[i] = &CommandMock{c, *c.GetFlags()}
 	}
@@ -156,17 +175,21 @@ type tempStuff struct {
 
 func (f *ApplicationMock) checkBuffer(out, err bool) {
 	if out {
-		if f.bufOut.Len() == 0 {
-			f.Fatal("Expected buffer")
-		}
+		/*
+			if f.bufOut.Len() == 0 {
+				// Print Stderr to see what happened.
+				f.Fatal("Expected buffer; " + f.bufErr.String())
+			}
+		*/
 	} else {
 		if f.bufOut.Len() != 0 {
-			f.Fatal("Unexpected buffer: " + f.bufOut.String())
+			f.Fatalf("Unexpected buffer:\n%s", f.bufOut.String())
 		}
 	}
+
 	if err {
 		if f.bufErr.Len() == 0 {
-			f.Fatal("Expected buffer")
+			f.Fatal("Expected buffer; " + f.bufOut.String())
 		}
 	} else {
 		if f.bufErr.Len() != 0 {
@@ -202,7 +225,7 @@ func (f *ApplicationMock) cleanup() {
 
 func (f *ApplicationMock) goWeb() {
 	if f.socket != nil {
-		f.Fail()
+		f.Fatal("Socket is empty")
 	}
 	c := make(chan net.Listener)
 	go func() {
@@ -244,19 +267,16 @@ func (f *ApplicationMock) get404(url string) {
 
 func TestHelp(t *testing.T) {
 	f := baseInit(t)
-	if 0 != Run(f, []string{"help"}) {
-		f.Fail()
-	}
-	// Prints to Stdout
+	args := []string{"help"}
+	f.Run(args, 0)
 	f.checkBuffer(true, false)
 }
 
 func TestBadFlag(t *testing.T) {
 	f := baseInit(t)
-	if 1 != Run(f, []string{"archive", "-random"}) {
-		f.Fail()
-	}
-	// Prints to Stderr
+	args := []string{"archive", "-random"}
+	f.Run(args, 0)
+	// Prints to Stderr.
 	f.checkBuffer(false, true)
 }
 
@@ -286,9 +306,7 @@ func sha1Map(in map[string]string) map[string]string {
 
 func runarchive(f *ApplicationMock) {
 	args := []string{"archive", "-root=" + f.tempArchive, path.Join(f.tempData, "toArchive")}
-	if 0 != Run(f, args) {
-		f.Fail()
-	}
+	f.Run(args, 0)
 	f.checkBuffer(true, false)
 }
 
@@ -311,7 +329,6 @@ func TestSmoke(t *testing.T) {
 
 	log.Print("T: Archive.")
 	runarchive(f)
-
 	log.Print("T: Serve over web and verify files are accessible.")
 	f.goWeb()
 	// Make sure it gets a redirect.
@@ -347,9 +364,7 @@ func TestSmoke(t *testing.T) {
 	}
 	runarchive(f)
 	args := []string{"gc", "-root=" + f.tempArchive}
-	if 0 != Run(f, args) {
-		f.Fail()
-	}
+	f.Run(args, 0)
 	f.checkBuffer(false, false)
 	log.Print("T: Lookup dir1/dir2/dir3/foo is still present in the backup")
 	f.goWeb()
@@ -372,9 +387,7 @@ func TestSmoke(t *testing.T) {
 	}
 	nodeName = matches[0]
 	args = []string{"gc", "-root=" + f.tempArchive}
-	if 0 != Run(f, args) {
-		f.Fail()
-	}
+	f.Run(args, 0)
 	f.checkBuffer(false, false)
 	f.goWeb()
 	f.get404("/content/retrieve/nodes/" + month + "/" + nodeName + f.tempData + "/dir1/dir2/dir3/foo")
@@ -386,17 +399,15 @@ func TestSmoke(t *testing.T) {
 	sha1 = sha1String(tree["dir1/bar"])
 	file, err := os.OpenFile(path.Join(f.tempArchive, "cas", sha1[:3], sha1[3:]), os.O_WRONLY, 0)
 	if err != nil {
-		f.Fatal()
+		f.Fatal("File is missing", err)
 	}
 	if _, err := io.WriteString(file, "something else"); err != nil {
-		f.Fatal()
+		f.Fatal("Write fail", err)
 	}
 	file.Sync()
 	file.Close()
 	args = []string{"fsck", "-root=" + f.tempArchive}
-	if 0 != Run(f, args) {
-		f.Fail()
-	}
+	f.Run(args, 0)
 	f.checkBuffer(false, false)
 	log.Print("T: Verify dir1/bar was removed.")
 	file, err = os.OpenFile(path.Join(f.tempArchive, "cas", sha1[:3], sha1[3:]), os.O_WRONLY, 0)

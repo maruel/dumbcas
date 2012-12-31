@@ -14,12 +14,17 @@ import (
 	"log"
 )
 
-var cmdFsck = &Command{
-	Run:       runFsck,
-	UsageLine: "fsck",
-	ShortDesc: "moves to trash all objects that are not valid content anymore",
-	LongDesc:  "Recalculate the sha-1 of each dumbcas entry and remove any that are corrupted",
-	Flag:      GetCommonFlags(),
+type fsck struct {
+	DefaultCommand
+}
+
+var cmdFsck = &fsck{
+	DefaultCommand{
+		UsageLine: "fsck",
+		ShortDesc: "moves to trash all objects that are not valid content anymore",
+		LongDesc:  "Recalculate the sha-1 of each dumbcas entry and remove any that are corrupted",
+		Flag:      GetCommonFlags(),
+	},
 }
 
 func fsckMain(l *log.Logger) error {
@@ -62,13 +67,14 @@ func fsckMain(l *log.Logger) error {
 	return nil
 }
 
-func runFsck(a *Application, cmd *Command, args []string) int {
+func (cmd *fsck) Run(a Application, args []string) int {
 	if len(args) != 0 {
-		fmt.Fprintf(a.Err, "%s: Unsupported arguments.\n", a.Name)
+		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1
 	}
-	if err := fsckMain(a.Log); err != nil {
-		fmt.Fprintf(a.Err, "%s: %s\n", a.Name, err)
+	d := a.(DumbcasApplication)
+	if err := fsckMain(d.GetLog()); err != nil {
+		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}
 	return 0

@@ -104,8 +104,8 @@ func readFileAsStrings(filepath string) ([]string, error) {
 }
 
 // Calculates each entry. Assumes inputs is cleaned paths.
-func (a *Application) processWithCache(inputs []string) (*Entry, error) {
-	a.Log.Printf("processWithCache(%d)", len(inputs))
+func processWithCache(a DumbcasApplication, inputs []string) (*Entry, error) {
+	a.GetLog().Printf("processWithCache(%d)", len(inputs))
 	cache, err := a.LoadCache()
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (a *Application) processWithCache(inputs []string) (*Entry, error) {
 			if len(display) > 50 {
 				display = "..." + display[len(display)-50:]
 			}
-			fmt.Fprintf(a.Out, "%d files %1.1fmb Hashing %s...    \r", count, float64(size)/1024./1024., display)
+			fmt.Fprintf(a.GetOut(), "%d files %1.1fmb Hashing %s...    \r", count, float64(size)/1024./1024., display)
 			cacheKey, key := RecursePath(cache.Root(), entryRoot, item.FullPath)
 			if err = UpdateFile(cacheKey, key, item); err != nil {
 				return nil, err
@@ -161,7 +161,7 @@ func (a *Application) processWithCache(inputs []string) (*Entry, error) {
 			size += item.FileInfo.Size()
 		}
 	}
-	fmt.Fprintf(a.Out, "\n")
+	fmt.Fprintf(a.GetOut(), "\n")
 	if IsInterrupted() {
 		return nil, errors.New("Ctrl-C'ed out")
 	}
@@ -208,15 +208,15 @@ func (s *Stats) recurseTree(itemPath string, entry *Entry, cas CasTable) error {
 	return nil
 }
 
-func (a *Application) casArchive(entries *Entry, cas CasTable) (string, error) {
-	a.Log.Printf("casArchive(%d entries)\n", entries.CountMembers())
+func casArchive(a DumbcasApplication, entries *Entry, cas CasTable) (string, error) {
+	a.GetLog().Printf("casArchive(%d entries)\n", entries.CountMembers())
 	root := ""
 	if filepath.Separator == '/' {
 		root = "/"
 	}
-	stats := Stats{stdout: a.Out}
+	stats := Stats{stdout: a.GetOut()}
 	err := stats.recurseTree(root, entries, cas)
-	fmt.Fprintf(a.Out, "\n")
+	fmt.Fprintf(a.GetOut(), "\n")
 	// Serialize the entry file to archive it too.
 	data, err := json.Marshal(&entries)
 	if err != nil {
@@ -232,7 +232,7 @@ func (a *Application) casArchive(entries *Entry, cas CasTable) (string, error) {
 		stats.nbArchived += 1
 		stats.archived += int64(len(data))
 	}
-	a.Log.Printf(
+	a.GetLog().Printf(
 		"Archived %d files (%d bytes) Skipped %d files, (%d bytes)\n",
 		stats.nbArchived, stats.archived, stats.nbSkipped, stats.skipped)
 	return entrySha1, nil
@@ -250,7 +250,7 @@ func cleanupList(relDir string, inputs []string) {
 	}
 }
 
-func (a *Application) archiveMain(toArchiveArg string) error {
+func archiveMain(a DumbcasApplication, toArchiveArg string) error {
 	cas, err := CommonFlag(true, true)
 	if err != nil {
 		return err
@@ -267,19 +267,19 @@ func (a *Application) archiveMain(toArchiveArg string) error {
 	}
 	// Make sure the file itself is archived too.
 	inputs = append(inputs, toArchive)
-	a.Log.Printf("Found %d entries to backup in %s", len(inputs), toArchive)
+	a.GetLog().Printf("Found %d entries to backup in %s", len(inputs), toArchive)
 	cleanupList(path.Dir(toArchive), inputs)
-	entry, err := a.processWithCache(inputs)
+	entry, err := processWithCache(a, inputs)
 	if err != nil {
 		return err
 	}
 
 	// Now the archival part. Create the basic directory structure.
-	nodes, err := LoadNodesTable(Root, cas, a.Log)
+	nodes, err := LoadNodesTable(Root, cas, a.GetLog())
 	if err != nil {
 		return err
 	}
-	entrySha1, err := a.casArchive(entry, cas)
+	entrySha1, err := casArchive(a, entry, cas)
 	if err != nil {
 		return err
 	}
@@ -287,12 +287,17 @@ func (a *Application) archiveMain(toArchiveArg string) error {
 	return nodes.AddEntry(node, path.Base(toArchive))
 }
 
-var cmdArchive = &Command{
-	Run:       runArchive,
-	UsageLine: "archive <.toArchive> -out <out>",
-	ShortDesc: "archive files to a dumbcas archive",
-	LongDesc:  "Archives files listed in <.toArchive> file to a directory in the DumbCas(tm) layout. Files listed may be in relative path or in absolute path and may contain environment variables.",
-	Flag:      GetCommonFlags(),
+type archive struct {
+	DefaultCommand
+}
+
+var cmdArchive = &archive{
+	DefaultCommand{
+		UsageLine: "archive <.toArchive> -out <out>",
+		ShortDesc: "archive files to a dumbcas archive",
+		LongDesc:  "Archives files listed in <.toArchive> file to a directory in the DumbCas(tm) layout. Files listed may be in relative path or in absolute path and may contain environment variables.",
+		Flag:      GetCommonFlags(),
+	},
 }
 
 // Flags.
@@ -302,14 +307,15 @@ func init() {
 	cmdArchive.Flag.StringVar(&archiveComment, "comment", "", "Comment to embed in the file")
 }
 
-func runArchive(a *Application, cmd *Command, args []string) int {
+func (cmd *archive) Run(a Application, args []string) int {
 	if len(args) != 1 {
-		fmt.Fprintf(a.Err, "%s: Must only provide a .toArchive file.\n", a.Name)
+		fmt.Fprintf(a.GetErr(), "%s: Must only provide a .toArchive file.\n", a.GetName())
 		return 1
 	}
 	HandleCtrlC()
-	if err := a.archiveMain(args[0]); err != nil {
-		fmt.Fprintf(a.Err, "%s: %s\n", a.Name, err)
+	d := a.(DumbcasApplication)
+	if err := archiveMain(d, args[0]); err != nil {
+		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}
 	return 0

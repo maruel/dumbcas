@@ -20,34 +20,80 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 	"text/template"
 )
 
-type Application struct {
-	Name     string
-	Title    string
-	Commands []*Command
-	Out      io.Writer
-	Err      io.Writer
-	Log      *log.Logger
+type Application interface {
+	GetName() string
+	GetTitle() string
+	GetCommands() []Command
+	GetOut() io.Writer // Used for testing, should be normally os.Stdout.
+	GetErr() io.Writer // Used for testing, should be normally os.Stderr.
 }
 
-type Command struct {
-	// In practice, it can a method, e.g.
-	// "func (a *Application) cmdFoo(cmd *Command, args []string) int"
-	Run       func(a *Application, cmd *Command, args []string) int
+type Command interface {
+	Run(a Application, args []string) int
+	GetName() string
+	GetUsageLine() string
+	GetShortDesc() string
+	GetLongDesc() string
+	GetFlags() *flag.FlagSet
+}
+
+type DefaultApplication struct {
+	Name     string
+	Title    string
+	Commands []Command
+}
+
+func (a *DefaultApplication) GetName() string {
+	return a.Name
+}
+
+func (a *DefaultApplication) GetTitle() string {
+	return a.Title
+}
+
+func (a *DefaultApplication) GetCommands() []Command {
+	return a.Commands
+}
+
+func (a *DefaultApplication) GetOut() io.Writer {
+	return os.Stdout
+}
+
+func (a *DefaultApplication) GetErr() io.Writer {
+	return os.Stderr
+}
+
+type DefaultCommand struct {
 	UsageLine string
 	ShortDesc string
 	LongDesc  string
 	Flag      flag.FlagSet
 }
 
+func (c *DefaultCommand) GetUsageLine() string {
+	return c.UsageLine
+}
+
+func (c *DefaultCommand) GetShortDesc() string {
+	return c.ShortDesc
+}
+
+func (c *DefaultCommand) GetLongDesc() string {
+	return c.LongDesc
+}
+
+func (c *DefaultCommand) GetFlags() *flag.FlagSet {
+	return &c.Flag
+}
+
 // Name returns the command's name: the first word in the usage line.
-func (c *Command) Name() string {
-	name := c.UsageLine
+func (c *DefaultCommand) GetName() string {
+	name := c.GetUsageLine()
 	i := strings.Index(name, " ")
 	if i >= 0 {
 		name = name[:i]
@@ -55,71 +101,48 @@ func (c *Command) Name() string {
 	return name
 }
 
-type IApplication interface {
-	Name() string
-	Title() string
-	Commands() []ICommand
-	Out() io.Writer
-	Err() io.Writer
-	Log() *log.Logger
-}
+func usage(out io.Writer, a Application) {
+	usageTemplate := `{{.GetTitle}}
 
-type ICommand interface {
-	Run(args []string) int
-	UsageLine() string
-	ShortDesc() string
-	LongDesc() string
-	Flags() *flag.FlagSet
-}
-
-var usageTemplate = `{{.Title}}
-
-Usage:  {{.Name}} [command] [arguments]
+Usage:  {{.GetName}} [command] [arguments]
 
 Commands:{{range .Commands}}
-    {{.Name | printf "%-11s"}} {{.ShortDesc}}{{end}}
+    {{.GetName | printf "%-11s"}} {{.GetShortDesc}}{{end}}
 
-Use "{{.Name}} help [command]" for more information about a command.
+Use "{{.GetName}} help [command]" for more information about a command.
 
 `
-
-func (a *Application) Usage() {
-	tmpl(a.Err, usageTemplate, a)
+	tmpl(out, usageTemplate, a)
 }
 
-func getCommandUsageHandler(a *Application, cmd *Command) func() {
+func getCommandUsageHandler(out io.Writer, a Application, cmd Command) func() {
 	return func() {
-		helpTemplate := "{{.Cmd.LongDesc | trim | wrapWithLines}}usage:  {{.App.Name}} {{.Cmd.UsageLine}}\n"
+		helpTemplate := "{{.Cmd.GetLongDesc | trim | wrapWithLines}}usage:  {{.App.GetName}} {{.Cmd.GetUsageLine}}\n"
 		dict := struct {
-			App *Application
-			Cmd *Command
+			App Application
+			Cmd Command
 		}{a, cmd}
-		tmpl(a.Err, helpTemplate, dict)
-		cmd.Flag.PrintDefaults()
+		tmpl(out, helpTemplate, dict)
+		cmd.GetFlags().PrintDefaults()
+	}
+}
+
+// Initialize commands.
+func initCommands(a Application, out io.Writer) {
+	for _, cmd := range a.GetCommands() {
+		cmd.GetFlags().Usage = getCommandUsageHandler(out, a, cmd)
+		cmd.GetFlags().SetOutput(out)
+		cmd.GetFlags().Init(cmd.GetName(), flag.ContinueOnError)
 	}
 }
 
 // Runs the application, scheduling the subcommand.
-func (a *Application) Run(args []string) int {
-	if a.Out == nil {
-		a.Out = os.Stdout
-	}
-	if a.Err == nil {
-		a.Err = os.Stderr
-	}
-	if a.Log == nil {
-		a.Log = log.New(a.Err, "", log.LstdFlags)
-	}
-	// Initialize commands.
-	for _, cmd := range a.Commands {
-		cmd.Flag.Usage = getCommandUsageHandler(a, cmd)
-		cmd.Flag.SetOutput(a.Err)
-		cmd.Flag.Init(cmd.Name(), flag.ContinueOnError)
-	}
+func Run(a Application, args []string) int {
+	initCommands(a, a.GetErr())
 
 	// Process general flags first, mainly for -help.
 	flag.Usage = func() {
-		a.Usage()
+		usage(a.GetErr(), a)
 	}
 
 	// Defaults; do not parse during unit tests because flag.commandLine.errorHandling == ExitOnError. :(
@@ -130,18 +153,18 @@ func (a *Application) Run(args []string) int {
 
 	if len(args) < 1 {
 		// Need a command.
-		a.Usage()
+		usage(a.GetErr(), a)
 		return 2
 	}
 
-	for _, cmd := range a.Commands {
-		if cmd.Name() == args[0] {
-			cmd.Flag.Parse(args[1:])
-			return cmd.Run(a, cmd, cmd.Flag.Args())
+	for _, cmd := range a.GetCommands() {
+		if cmd.GetName() == args[0] {
+			cmd.GetFlags().Parse(args[1:])
+			return cmd.Run(a, cmd.GetFlags().Args())
 		}
 	}
 
-	fmt.Fprintf(a.Err, "%s: unknown command %#q\n\nRun '%s help' for usage.\n", a.Name, args[0], a.Name)
+	fmt.Fprintf(a.GetErr(), "%s: unknown command %#q\n\nRun '%s help' for usage.\n", a.GetName(), args[0], a.GetName())
 	return 2
 }
 
@@ -162,32 +185,37 @@ func wrapWithLines(s string) string {
 	return s + "\n\n"
 }
 
-var cmdHelp = &Command{
-	Run:       runHelp,
-	UsageLine: "help <command>",
-	ShortDesc: "prints help about a command",
-	LongDesc:  "Prints an overview of every commands or information about a specific command.",
+type help struct {
+	DefaultCommand
 }
 
-func runHelp(a *Application, cmd *Command, args []string) int {
-	// Redirect all output to Out.
-	a.Err = a.Out
+var cmdHelp = &help{
+	DefaultCommand{
+		UsageLine: "help <command>",
+		ShortDesc: "prints help about a command",
+		LongDesc:  "Prints an overview of every commands or information about a specific command.",
+	},
+}
+
+func (c *help) Run(a Application, args []string) int {
 	if len(args) == 0 {
-		a.Usage()
+		usage(a.GetOut(), a)
 		return 0
 	}
 	if len(args) != 1 {
-		fmt.Fprintf(a.Err, "%s: Too many arguments given\n\nRun '%s help' for usage.\n", a.Name, a.Name)
+		fmt.Fprintf(a.GetErr(), "%s: Too many arguments given\n\nRun '%s help' for usage.\n", a.GetName(), a.GetName())
 		return 2
 	}
+	// Redirects all output to Out.
+	initCommands(a, a.GetOut())
 
-	for _, cmdFound := range a.Commands {
-		if cmdFound.Name() == args[0] {
-			cmdFound.Flag.Usage()
+	for _, cmdFound := range a.GetCommands() {
+		if cmdFound.GetName() == args[0] {
+			cmdFound.GetFlags().Usage()
 			return 0
 		}
 	}
 
-	fmt.Fprintf(a.Err, "%s: unknown command %#q\n\nRun '%s help' for usage.\n", a.Name, args[0], a.Name)
+	fmt.Fprintf(a.GetErr(), "%s: unknown command %#q\n\nRun '%s help' for usage.\n", a.GetName(), args[0], a.GetName())
 	return 2
 }

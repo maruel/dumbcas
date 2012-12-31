@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -94,19 +95,52 @@ func createTree(rootDir string, tree map[string]string) error {
 }
 
 type ApplicationMock struct {
-	Application
+	DefaultApplication
 	*testing.T
 	bufOut bytes.Buffer
 	bufErr bytes.Buffer
 	bufLog bytes.Buffer
 	log    *log.Logger
-	// IO testing.
+	// Optional stuff
 	tempArchive string
 	tempData    string
-	// Web stuff.
-	socket  net.Listener
-	closed  chan bool
-	baseUrl string
+	socket      net.Listener
+	closed      chan bool
+	baseUrl     string
+}
+
+func (a *ApplicationMock) GetOut() io.Writer {
+	return &a.bufOut
+}
+
+func (a *ApplicationMock) GetErr() io.Writer {
+	return &a.bufErr
+}
+
+func (a *ApplicationMock) GetLog() *log.Logger {
+	return a.log
+}
+
+type CommandMock struct {
+	Command
+	flags flag.FlagSet
+}
+
+func (c *CommandMock) GetFlags() *flag.FlagSet {
+	return &c.flags
+}
+
+func makeMock(t *testing.T) *ApplicationMock {
+	a := &ApplicationMock{
+		DefaultApplication: application,
+		testing.T:          t,
+		closed:             make(chan bool),
+	}
+	a.log = log.New(&a.bufLog, "", 0)
+	for i, c := range a.Commands {
+		a.Commands[i] = &CommandMock{c, *c.GetFlags()}
+	}
+	return a
 }
 
 func baseInit(t *testing.T) *ApplicationMock {
@@ -114,22 +148,10 @@ func baseInit(t *testing.T) *ApplicationMock {
 	// debugging.
 	t.Parallel()
 
-	// Create a copy of application and use it.
-	f := &ApplicationMock{
-		testing.T:   t,
-		Application: *application,
-		log:         log.New(&bufLog, "", 0),
-		closed:      make(chan bool),
-	}
-	for i, _ := range f.Commands {
-		cmd := &Command{}
-		*cmd = *f.Commands[i]
-		f.Commands[i] = cmd
-	}
-	f.Err = &f.bufErr
-	f.Out = &f.bufOut
-	f.Log = f.log
-	return f
+	return makeMock(t)
+}
+
+type tempStuff struct {
 }
 
 func (f *ApplicationMock) checkBuffer(out, err bool) {
@@ -222,7 +244,7 @@ func (f *ApplicationMock) get404(url string) {
 
 func TestHelp(t *testing.T) {
 	f := baseInit(t)
-	if 0 != f.Run([]string{"help"}) {
+	if 0 != Run(f, []string{"help"}) {
 		f.Fail()
 	}
 	// Prints to Stdout
@@ -231,7 +253,7 @@ func TestHelp(t *testing.T) {
 
 func TestBadFlag(t *testing.T) {
 	f := baseInit(t)
-	if 1 != f.Run([]string{"archive", "-random"}) {
+	if 1 != Run(f, []string{"archive", "-random"}) {
 		f.Fail()
 	}
 	// Prints to Stderr
@@ -262,9 +284,9 @@ func sha1Map(in map[string]string) map[string]string {
 	return out
 }
 
-func archive(f *ApplicationMock) {
+func runarchive(f *ApplicationMock) {
 	args := []string{"archive", "-root=" + f.tempArchive, path.Join(f.tempData, "toArchive")}
-	if 0 != f.Run(args) {
+	if 0 != Run(f, args) {
 		f.Fail()
 	}
 	f.checkBuffer(true, false)
@@ -288,7 +310,7 @@ func TestSmoke(t *testing.T) {
 	}
 
 	log.Print("T: Archive.")
-	archive(f)
+	runarchive(f)
 
 	log.Print("T: Serve over web and verify files are accessible.")
 	f.goWeb()
@@ -323,9 +345,9 @@ func TestSmoke(t *testing.T) {
 	if err := os.Remove(path.Join(f.tempData, "dir1", "dir2", "dir3", "foo")); err != nil {
 		f.Fatal(err)
 	}
-	archive(f)
+	runarchive(f)
 	args := []string{"gc", "-root=" + f.tempArchive}
-	if 0 != f.Run(args) {
+	if 0 != Run(f, args) {
 		f.Fail()
 	}
 	f.checkBuffer(false, false)
@@ -350,7 +372,7 @@ func TestSmoke(t *testing.T) {
 	}
 	nodeName = matches[0]
 	args = []string{"gc", "-root=" + f.tempArchive}
-	if 0 != f.Run(args) {
+	if 0 != Run(f, args) {
 		f.Fail()
 	}
 	f.checkBuffer(false, false)
@@ -372,7 +394,7 @@ func TestSmoke(t *testing.T) {
 	file.Sync()
 	file.Close()
 	args = []string{"fsck", "-root=" + f.tempArchive}
-	if 0 != f.Run(args) {
+	if 0 != Run(f, args) {
 		f.Fail()
 	}
 	f.checkBuffer(false, false)

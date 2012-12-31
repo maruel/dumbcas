@@ -14,12 +14,17 @@ import (
 	"log"
 )
 
-var cmdGc = &Command{
-	Run:       runGc,
-	UsageLine: "gc",
-	ShortDesc: "moves to trash all objects that are not referenced anymore",
-	LongDesc:  "Scans each node and each entry file to determine if each cas entry is referenced or not.",
-	Flag:      GetCommonFlags(),
+type gc struct {
+	DefaultCommand
+}
+
+var cmdGc = &gc{
+	DefaultCommand{
+		UsageLine: "gc",
+		ShortDesc: "moves to trash all objects that are not referenced anymore",
+		LongDesc:  "Scans each node and each entry file to determine if each cas entry is referenced or not.",
+		Flag:      GetCommonFlags(),
+	},
 }
 
 func TagRecurse(entries map[string]bool, entry *Entry) {
@@ -78,13 +83,14 @@ func gcMain(name string, l *log.Logger) error {
 	return nil
 }
 
-func runGc(a *Application, cmd *Command, args []string) int {
+func (c *gc) Run(a Application, args []string) int {
 	if len(args) != 0 {
-		fmt.Fprintf(a.Err, "%s: Unsupported arguments.\n", a.Name)
+		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1
 	}
-	if err := gcMain(a.Name, a.Log); err != nil {
-		fmt.Fprintf(a.Err, "%s: %s\n", a.Name, err)
+	d := a.(DumbcasApplication)
+	if err := gcMain(a.GetName(), d.GetLog()); err != nil {
+		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}
 	return 0

@@ -14,10 +14,10 @@ import (
 	"os"
 )
 
-var application = &Application{
+var application = DefaultApplication{
 	Name:  "dumbcas",
 	Title: "Dumbcas is a simple Content Addressed Datastore to be used as a simple backup tool.",
-	Commands: []*Command{
+	Commands: []Command{
 		cmdArchive,
 		cmdFsck,
 		cmdGc,
@@ -26,7 +26,27 @@ var application = &Application{
 	},
 }
 
+type DumbcasApplication interface {
+	Application
+	GetLog() *log.Logger
+	LoadCache() (Cache, error)
+}
+
+type dumbapp struct {
+	DefaultApplication
+	l *log.Logger
+}
+
+func (d *dumbapp) GetLog() *log.Logger {
+	return d.l
+}
+
+func (d *dumbapp) LoadCache() (Cache, error) {
+	return loadCache()
+}
+
 func main() {
 	log.SetFlags(log.Lmicroseconds)
-	os.Exit(application.Run(nil))
+	d := &dumbapp{application, log.New(application.GetErr(), "", log.LstdFlags|log.Lmicroseconds)}
+	os.Exit(Run(d, nil))
 }

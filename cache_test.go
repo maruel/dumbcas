@@ -33,8 +33,6 @@ func (c *cacheMock) Close() {
 }
 
 func (a *ApplicationMock) LoadCache() (Cache, error) {
-	// TODO(maruel): Hack until this gets called.
-	panic("R")
 	return &cacheMock{&EntryCache{}, false}, nil
 }
 

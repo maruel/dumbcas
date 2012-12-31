@@ -82,12 +82,17 @@ func localRedirect(w http.ResponseWriter, r *http.Request, newPath string) {
 	w.WriteHeader(http.StatusMovedPermanently)
 }
 
-var cmdWeb = &Command{
-	Run:       runWeb,
-	UsageLine: "web",
-	ShortDesc: "starts a web service to access the dumbcas",
-	LongDesc:  "Serves each node as a full virtual tree of the archived files.",
-	Flag:      GetCommonFlags(),
+type web struct {
+	DefaultCommand
+}
+
+var cmdWeb = &web{
+	DefaultCommand{
+		UsageLine: "web",
+		ShortDesc: "starts a web service to access the dumbcas",
+		LongDesc:  "Serves each node as a full virtual tree of the archived files.",
+		Flag:      GetCommonFlags(),
+	},
 }
 
 func webMain(port int, ready chan<- net.Listener, l *log.Logger) error {
@@ -135,13 +140,14 @@ func init() {
 	cmdWeb.Flag.IntVar(&webPort, "port", 8010, "port number")
 }
 
-func runWeb(a *Application, cmd *Command, args []string) int {
+func (c *web) Run(a Application, args []string) int {
 	if len(args) != 0 {
-		fmt.Fprintf(a.Err, "%s: Unsupported arguments.\n", a.Name)
+		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1
 	}
-	if err := webMain(webPort, nil, a.Log); err != nil {
-		fmt.Fprintf(a.Err, "%s: %s\n", a.Name, err)
+	d := a.(DumbcasApplication)
+	if err := webMain(webPort, nil, d.GetLog()); err != nil {
+		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}
 	// This is never executed.

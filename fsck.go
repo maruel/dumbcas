@@ -27,7 +27,7 @@ var cmdFsck = &fsck{
 }
 
 func fsckMain(a DumbcasApplication) error {
-	cas, err := CommonFlag(a, false, true)
+	cas, _, err := CommonFlag(a, false, true)
 	if err != nil {
 		return err
 	}

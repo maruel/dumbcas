@@ -36,15 +36,11 @@ func TagRecurse(entries map[string]bool, entry *Entry) {
 }
 
 func gcMain(a DumbcasApplication) error {
-	cas, err := CommonFlag(a, false, false)
+	cas, nodes, err := CommonFlag(a, false, false)
 	if err != nil {
 		return err
 	}
 
-	nodes, err := LoadNodesTable(Root, cas, a.GetLog())
-	if err != nil {
-		return err
-	}
 	entries := map[string]bool{}
 	for item := range cas.Enumerate() {
 		if item.Error != nil {

@@ -32,30 +32,34 @@ func GetCommonFlags() flag.FlagSet {
 	return flags
 }
 
-func CommonFlag(d DumbcasApplication, createRoot bool, bypassFsck bool) (CasTable, error) {
+func CommonFlag(d DumbcasApplication, createRoot bool, bypassFsck bool) (CasTable, NodesTable, error) {
 	if Root == "" {
-		return nil, errors.New("Must provide -root")
+		return nil, nil, errors.New("Must provide -root")
 	}
 	if root, err := filepath.Abs(Root); err != nil {
-		return nil, fmt.Errorf("Failed to find %s", Root)
+		return nil, nil, fmt.Errorf("Failed to find %s", Root)
 	} else {
 		Root = root
 	}
 
 	if createRoot {
 		if err := os.MkdirAll(Root, 0750); err != nil && !os.IsExist(err) {
-			return nil, fmt.Errorf("Failed to create %s: %s", Root, err)
+			return nil, nil, fmt.Errorf("Failed to create %s: %s", Root, err)
 		}
 	}
 
 	cas, err := d.MakeCasTable(Root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if cas.WarnIfFsckIsNeeded() && !bypassFsck {
-		return nil, fmt.Errorf("Can't run if fsck is needed. Please run fsck first.")
+		return nil, nil, fmt.Errorf("Can't run if fsck is needed. Please run fsck first.")
 	}
-	return cas, nil
+	nodes, err := d.LoadNodesTable(Root, cas)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cas, nodes, nil
 }
 
 type TreeItem struct {

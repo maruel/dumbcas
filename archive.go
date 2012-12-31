@@ -251,7 +251,7 @@ func cleanupList(relDir string, inputs []string) {
 }
 
 func archiveMain(a DumbcasApplication, toArchiveArg string) error {
-	cas, err := CommonFlag(a, true, true)
+	cas, nodes, err := CommonFlag(a, true, true)
 	if err != nil {
 		return err
 	}
@@ -275,10 +275,6 @@ func archiveMain(a DumbcasApplication, toArchiveArg string) error {
 	}
 
 	// Now the archival part. Create the basic directory structure.
-	nodes, err := LoadNodesTable(Root, cas, a.GetLog())
-	if err != nil {
-		return err
-	}
 	entrySha1, err := casArchive(a, entry, cas)
 	if err != nil {
 		return err

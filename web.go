@@ -96,17 +96,10 @@ var cmdWeb = &web{
 }
 
 func webMain(d DumbcasApplication, port int, ready chan<- net.Listener) error {
-	cas, err := CommonFlag(d, false, true)
+	cas, nodes, err := CommonFlag(d, false, true)
 	if err != nil {
 		return err
 	}
-
-	l := d.GetLog()
-	nodes, err := LoadNodesTable(Root, cas, l)
-	// TODO(maruel): Add back.
-	//if !isDir(nodesDir) {
-	//	return fmt.Errorf("Please archive something first into %s", Root)
-	//}
 
 	serveMux := http.NewServeMux()
 
@@ -118,7 +111,7 @@ func webMain(d DumbcasApplication, port int, ready chan<- net.Listener) error {
 
 	s := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: &LoggingHandler{serveMux, l},
+		Handler: &LoggingHandler{serveMux, d.GetLog()},
 	}
 	ls, e := net.Listen("tcp", s.Addr)
 	if e != nil {
@@ -126,7 +119,7 @@ func webMain(d DumbcasApplication, port int, ready chan<- net.Listener) error {
 	}
 
 	_, portStr, _ := net.SplitHostPort(ls.Addr().String())
-	l.Printf("Serving %s on port %s", Root, portStr)
+	d.GetLog().Printf("Serving %s on port %s", Root, portStr)
 
 	if ready != nil {
 		ready <- ls

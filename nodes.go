@@ -74,7 +74,7 @@ type entryCache struct {
 	lastAccess time.Time
 }
 
-func LoadNodesTable(rootDir string, cas CasTable, l *log.Logger) (NodesTable, error) {
+func loadNodesTable(rootDir string, cas CasTable, l *log.Logger) (NodesTable, error) {
 	nodesDir := path.Join(rootDir, nodesName)
 	if err := os.Mkdir(nodesDir, 0750); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("LoadNodesTable(%s): Failed to create %s: %s\n", rootDir, nodesDir, err)

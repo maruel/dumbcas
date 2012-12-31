@@ -61,8 +61,6 @@ type ReadSeekCloser interface {
 	io.Closer
 }
 
-var MakeCasTable func(rootDir string) (CasTable, error) = makeCasTable
-
 // Converts an entry in the table into a proper file path.
 func (c *casTable) filePath(hash string) string {
 	match := c.validPath.FindStringSubmatch(hash)

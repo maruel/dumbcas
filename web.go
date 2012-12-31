@@ -95,12 +95,13 @@ var cmdWeb = &web{
 	},
 }
 
-func webMain(port int, ready chan<- net.Listener, l *log.Logger) error {
-	cas, err := CommonFlag(false, true)
+func webMain(d DumbcasApplication, port int, ready chan<- net.Listener) error {
+	cas, err := CommonFlag(d, false, true)
 	if err != nil {
 		return err
 	}
 
+	l := d.GetLog()
 	nodes, err := LoadNodesTable(Root, cas, l)
 	// TODO(maruel): Add back.
 	//if !isDir(nodesDir) {
@@ -146,7 +147,7 @@ func (c *web) Run(a Application, args []string) int {
 		return 1
 	}
 	d := a.(DumbcasApplication)
-	if err := webMain(webPort, nil, d.GetLog()); err != nil {
+	if err := webMain(d, webPort, nil); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

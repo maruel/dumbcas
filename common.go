@@ -32,7 +32,7 @@ func GetCommonFlags() flag.FlagSet {
 	return flags
 }
 
-func CommonFlag(createRoot bool, bypassFsck bool) (CasTable, error) {
+func CommonFlag(d DumbcasApplication, createRoot bool, bypassFsck bool) (CasTable, error) {
 	if Root == "" {
 		return nil, errors.New("Must provide -root")
 	}
@@ -48,7 +48,7 @@ func CommonFlag(createRoot bool, bypassFsck bool) (CasTable, error) {
 		}
 	}
 
-	cas, err := MakeCasTable(Root)
+	cas, err := d.MakeCasTable(Root)
 	if err != nil {
 		return nil, err
 	}

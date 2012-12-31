@@ -30,6 +30,7 @@ type DumbcasApplication interface {
 	Application
 	GetLog() *log.Logger
 	LoadCache() (Cache, error)
+	MakeCasTable(rootDir string) (CasTable, error)
 }
 
 type dumbapp struct {
@@ -43,6 +44,10 @@ func (d *dumbapp) GetLog() *log.Logger {
 
 func (d *dumbapp) LoadCache() (Cache, error) {
 	return loadCache()
+}
+
+func (d *dumbapp) MakeCasTable(rootDir string) (CasTable, error) {
+	return makeCasTable(rootDir)
 }
 
 func main() {

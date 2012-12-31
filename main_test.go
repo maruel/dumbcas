@@ -229,7 +229,7 @@ func (f *ApplicationMock) goWeb() {
 	}
 	c := make(chan net.Listener)
 	go func() {
-		webMain(0, c, f.log)
+		webMain(f, 0, c)
 		f.closed <- true
 	}()
 	f.socket = <-c

@@ -21,15 +21,12 @@ import (
 type mockCasTable struct {
 	entries  map[string][]byte
 	needFsck bool
+	*testing.T
 }
 
-func MakeMockCasTable(rootDir string) (CasTable, error) {
-	return &mockCasTable{entries: make(map[string][]byte)}, nil
-}
-
-func init() {
-	// TODO(maruel): Once it works.
-	//MakeCasTable = MakeMockCasTable
+func (a *ApplicationMock) MakeCasTable(rootDir string) (CasTable, error) {
+	//return &mockCasTable{make(map[string][]byte), false, a.T}, nil
+	return makeCasTable(rootDir)
 }
 
 func (m *mockCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {

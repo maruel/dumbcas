@@ -11,7 +11,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 )
 
 type gc struct {
@@ -36,13 +35,13 @@ func TagRecurse(entries map[string]bool, entry *Entry) {
 	}
 }
 
-func gcMain(name string, l *log.Logger) error {
-	cas, err := CommonFlag(false, false)
+func gcMain(a DumbcasApplication) error {
+	cas, err := CommonFlag(a, false, false)
 	if err != nil {
 		return err
 	}
 
-	nodes, err := LoadNodesTable(Root, cas, l)
+	nodes, err := LoadNodesTable(Root, cas, a.GetLog())
 	if err != nil {
 		return err
 	}
@@ -55,7 +54,7 @@ func gcMain(name string, l *log.Logger) error {
 		}
 		entries[item.Item] = false
 	}
-	l.Printf("Found %d entries", len(entries))
+	a.GetLog().Printf("Found %d entries", len(entries))
 
 	// Load all the nodes.
 	for item := range nodes.Enumerate() {
@@ -73,7 +72,7 @@ func gcMain(name string, l *log.Logger) error {
 			orphans = append(orphans, entry)
 		}
 	}
-	l.Printf("Found %d orphan", len(orphans))
+	a.GetLog().Printf("Found %d orphan", len(orphans))
 	for _, orphan := range orphans {
 		if err := cas.Remove(orphan); err != nil {
 			cas.NeedFsck()
@@ -89,7 +88,7 @@ func (c *gc) Run(a Application, args []string) int {
 		return 1
 	}
 	d := a.(DumbcasApplication)
-	if err := gcMain(a.GetName(), d.GetLog()); err != nil {
+	if err := gcMain(d); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

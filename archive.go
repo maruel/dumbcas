@@ -251,7 +251,7 @@ func cleanupList(relDir string, inputs []string) {
 }
 
 func archiveMain(a DumbcasApplication, toArchiveArg string) error {
-	cas, err := CommonFlag(true, true)
+	cas, err := CommonFlag(a, true, true)
 	if err != nil {
 		return err
 	}

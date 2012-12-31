@@ -11,7 +11,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 )
 
 type fsck struct {
@@ -27,8 +26,8 @@ var cmdFsck = &fsck{
 	},
 }
 
-func fsckMain(l *log.Logger) error {
-	cas, err := CommonFlag(false, true)
+func fsckMain(a DumbcasApplication) error {
+	cas, err := CommonFlag(a, false, true)
 	if err != nil {
 		return err
 	}
@@ -56,14 +55,14 @@ func fsckMain(l *log.Logger) error {
 		}
 		if actual != item.Item {
 			corrupted += 1
-			l.Printf("Found corrupted object, %s != %s", item.Item, actual)
+			a.GetLog().Printf("Found corrupted object, %s != %s", item.Item, actual)
 			if err := cas.Remove(item.Item); err != nil {
 				// TODO(maruel): Leaks channel.
 				return fmt.Errorf("Failed to trash object %s: %s", item.Item, err)
 			}
 		}
 	}
-	l.Printf("Scanned %d entries; found %d corrupted, %d invalid.", count, corrupted)
+	a.GetLog().Printf("Scanned %d entries; found %d corrupted, %d invalid.", count, corrupted)
 	return nil
 }
 
@@ -73,7 +72,7 @@ func (cmd *fsck) Run(a Application, args []string) int {
 		return 1
 	}
 	d := a.(DumbcasApplication)
-	if err := fsckMain(d.GetLog()); err != nil {
+	if err := fsckMain(d); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

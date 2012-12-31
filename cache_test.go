@@ -32,10 +32,10 @@ func (c *cacheMock) Close() {
 	c.closed = true
 }
 
-func init() {
-	LoadCache = func() (Cache, error) {
-		return &cacheMock{&EntryCache{}, false}, nil
-	}
+func (a *ApplicationMock) LoadCache() (Cache, error) {
+	// TODO(maruel): Hack until this gets called.
+	panic("R")
+	return &cacheMock{&EntryCache{}, false}, nil
 }
 
 func TestCache(t *testing.T) {

@@ -93,44 +93,46 @@ func createTree(rootDir string, tree map[string]string) error {
 	return nil
 }
 
-type fixture struct {
+type ApplicationMock struct {
+	Application
 	*testing.T
-	a           Application
-	bufOut      bytes.Buffer
-	bufErr      bytes.Buffer
-	bufLog      bytes.Buffer
-	log         *log.Logger
+	bufOut bytes.Buffer
+	bufErr bytes.Buffer
+	bufLog bytes.Buffer
+	log    *log.Logger
+	// IO testing.
 	tempArchive string
 	tempData    string
-	socket      net.Listener
-	closed      chan bool
-	baseUrl     string
+	// Web stuff.
+	socket  net.Listener
+	closed  chan bool
+	baseUrl string
 }
 
-func baseInit(t *testing.T) *fixture {
+func baseInit(t *testing.T) *ApplicationMock {
 	// The test cases in this file are multi-thread safe. Comment out to ease
 	// debugging.
 	t.Parallel()
 
 	// Create a copy of application and use it.
-	f := &fixture{
-		testing.T: t,
-		a:         *application,
-		log:       log.New(&bufLog, "", 0),
-		closed:    make(chan bool),
+	f := &ApplicationMock{
+		testing.T:   t,
+		Application: *application,
+		log:         log.New(&bufLog, "", 0),
+		closed:      make(chan bool),
 	}
-	for i, _ := range f.a.Commands {
+	for i, _ := range f.Commands {
 		cmd := &Command{}
-		*cmd = *f.a.Commands[i]
-		f.a.Commands[i] = cmd
+		*cmd = *f.Commands[i]
+		f.Commands[i] = cmd
 	}
-	f.a.Err = &f.bufErr
-	f.a.Out = &f.bufOut
-	f.a.Log = f.log
+	f.Err = &f.bufErr
+	f.Out = &f.bufOut
+	f.Log = f.log
 	return f
 }
 
-func (f *fixture) checkBuffer(out, err bool) {
+func (f *ApplicationMock) checkBuffer(out, err bool) {
 	if out {
 		if f.bufOut.Len() == 0 {
 			f.Fatal("Expected buffer")
@@ -153,7 +155,7 @@ func (f *fixture) checkBuffer(out, err bool) {
 	f.bufErr.Reset()
 }
 
-func (f *fixture) makeDirs() {
+func (f *ApplicationMock) makeDirs() {
 	tempData, err := makeTempDir("data")
 	if err != nil {
 		f.Fatalf("Failed to create data dir: %s", err)
@@ -167,7 +169,7 @@ func (f *fixture) makeDirs() {
 		f.tempArchive = tempArchive
 	}
 }
-func (f *fixture) cleanup() {
+func (f *ApplicationMock) cleanup() {
 	if f.tempArchive != "" {
 		removeTempDir(f.tempArchive)
 	}
@@ -176,7 +178,7 @@ func (f *fixture) cleanup() {
 	}
 }
 
-func (f *fixture) goWeb() {
+func (f *ApplicationMock) goWeb() {
 	if f.socket != nil {
 		f.Fail()
 	}
@@ -189,7 +191,7 @@ func (f *fixture) goWeb() {
 	f.baseUrl = fmt.Sprintf("http://%s", f.socket.Addr().String())
 }
 
-func (f *fixture) closeWeb() {
+func (f *ApplicationMock) closeWeb() {
 	f.socket.Close()
 	f.socket = nil
 	f.baseUrl = ""
@@ -197,7 +199,7 @@ func (f *fixture) closeWeb() {
 	f.checkBuffer(false, false)
 }
 
-func (f *fixture) get(url string, expectedUrl string) *http.Response {
+func (f *ApplicationMock) get(url string, expectedUrl string) *http.Response {
 	r, err := http.Get(f.baseUrl + url)
 	if err != nil {
 		f.Fatal(err)
@@ -208,7 +210,7 @@ func (f *fixture) get(url string, expectedUrl string) *http.Response {
 	return r
 }
 
-func (f *fixture) get404(url string) {
+func (f *ApplicationMock) get404(url string) {
 	r, err := http.Get(f.baseUrl + url)
 	if err != nil {
 		f.Fatal(err)
@@ -220,7 +222,7 @@ func (f *fixture) get404(url string) {
 
 func TestHelp(t *testing.T) {
 	f := baseInit(t)
-	if 0 != f.a.Run([]string{"help"}) {
+	if 0 != f.Run([]string{"help"}) {
 		f.Fail()
 	}
 	// Prints to Stdout
@@ -229,7 +231,7 @@ func TestHelp(t *testing.T) {
 
 func TestBadFlag(t *testing.T) {
 	f := baseInit(t)
-	if 1 != f.a.Run([]string{"archive", "-random"}) {
+	if 1 != f.Run([]string{"archive", "-random"}) {
 		f.Fail()
 	}
 	// Prints to Stderr
@@ -260,9 +262,9 @@ func sha1Map(in map[string]string) map[string]string {
 	return out
 }
 
-func archive(f *fixture) {
+func archive(f *ApplicationMock) {
 	args := []string{"archive", "-root=" + f.tempArchive, path.Join(f.tempData, "toArchive")}
-	if 0 != f.a.Run(args) {
+	if 0 != f.Run(args) {
 		f.Fail()
 	}
 	f.checkBuffer(true, false)
@@ -323,7 +325,7 @@ func TestSmoke(t *testing.T) {
 	}
 	archive(f)
 	args := []string{"gc", "-root=" + f.tempArchive}
-	if 0 != f.a.Run(args) {
+	if 0 != f.Run(args) {
 		f.Fail()
 	}
 	f.checkBuffer(false, false)
@@ -348,7 +350,7 @@ func TestSmoke(t *testing.T) {
 	}
 	nodeName = matches[0]
 	args = []string{"gc", "-root=" + f.tempArchive}
-	if 0 != f.a.Run(args) {
+	if 0 != f.Run(args) {
 		f.Fail()
 	}
 	f.checkBuffer(false, false)
@@ -370,7 +372,7 @@ func TestSmoke(t *testing.T) {
 	file.Sync()
 	file.Close()
 	args = []string{"fsck", "-root=" + f.tempArchive}
-	if 0 != f.a.Run(args) {
+	if 0 != f.Run(args) {
 		f.Fail()
 	}
 	f.checkBuffer(false, false)

@@ -36,6 +36,8 @@ type Application struct {
 }
 
 type Command struct {
+	// In practice, it can a method, e.g.
+	// "func (a *Application) cmdFoo(cmd *Command, args []string) int"
 	Run       func(a *Application, cmd *Command, args []string) int
 	UsageLine string
 	ShortDesc string
@@ -51,6 +53,23 @@ func (c *Command) Name() string {
 		name = name[:i]
 	}
 	return name
+}
+
+type IApplication interface {
+	Name() string
+	Title() string
+	Commands() []ICommand
+	Out() io.Writer
+	Err() io.Writer
+	Log() *log.Logger
+}
+
+type ICommand interface {
+	Run(args []string) int
+	UsageLine() string
+	ShortDesc() string
+	LongDesc() string
+	Flags() *flag.FlagSet
 }
 
 var usageTemplate = `{{.Title}}

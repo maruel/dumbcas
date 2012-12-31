@@ -34,9 +34,12 @@ func (m *mockCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *mockCasTable) Enumerate() <-chan CasEntry {
-	keys := make([]string, 0, len(m.entries))
+	// First make a copy of the keys.
+	keys := make([]string, len(m.entries))
+	i := 0
 	for k, _ := range m.entries {
-		keys = append(keys, k)
+		keys[i] = k
+		i++
 	}
 	c := make(chan CasEntry)
 	go func() {

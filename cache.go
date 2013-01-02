@@ -10,10 +10,9 @@ limitations under the License. */
 package main
 
 import (
-	"encoding/json"
+	"encoding/gob"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
@@ -22,12 +21,16 @@ import (
 	"time"
 )
 
+func init() {
+	gob.Register(&EntryCache{})
+}
+
 type EntryCache struct {
-	Sha1       string                 `json:"h,omitempty"`
-	Size       int64                  `json:"s,omitempty"`
-	Timestamp  int64                  `json:"t,omitempty"` // In Unix() epoch.
-	LastTested int64                  `json:"T,omitempty"` // Last time this file was tested for presence.
-	Files      map[string]*EntryCache `json:"f,omitempty"`
+	Sha1       string
+	Size       int64
+	Timestamp  int64 // In Unix() epoch.
+	LastTested int64 // Last time this file was tested for presence.
+	Files      map[string]*EntryCache
 }
 
 // Prints the EntryCache in Yaml-inspired output.
@@ -72,6 +75,8 @@ type Cache interface {
 
 // Loads the cache from ~/.dumbcas/cache.json and keeps it open until the call
 // to Save().
+// TODO(maruel): Ensure proper file locking. One way is to always create a new
+// file when adding data and then periodically garbage-collect the files.
 func loadCache() (Cache, error) {
 	usr, err := user.Current()
 	if err != nil {
@@ -82,16 +87,23 @@ func loadCache() (Cache, error) {
 		return nil, fmt.Errorf("Failed to access %s: %s", cacheDir, err)
 	}
 	root := &EntryCache{}
-	cacheFile := path.Join(cacheDir, "cache.json")
+	cacheFile := path.Join(cacheDir, "cache.gob")
 	f, err := os.OpenFile(cacheFile, os.O_CREATE|os.O_RDWR, 0600)
 	if f == nil {
 		return nil, fmt.Errorf("Failed to access %s: %s", cacheFile, err)
 	}
-	if data, err := ioutil.ReadAll(f); err == nil && len(data) != 0 {
-		if err = json.Unmarshal(data, &root); err != nil {
-			// Ignore unmarshaling failure.
-			root = &EntryCache{}
-		}
+
+	// The cache uses gob instead of json because:
+	// - The data can be read and written incrementally instead of having to read
+	//   it all at once.
+	// - It's significantly faster than json.
+	// - It's significantly smaller than json.
+	// - The program works fine without cache so it's not a big deal if it ever
+	//   become backward incomatible.
+	d := gob.NewDecoder(f)
+	if err := d.Decode(&root); err != nil {
+		// Ignore unmarshaling failure.
+		root = &EntryCache{}
 	}
 	if _, err = f.Seek(0, 0); err != nil {
 		return nil, fmt.Errorf("Failed to seek %s: %s", cacheFile, err)
@@ -105,12 +117,12 @@ func (c *cache) Root() *EntryCache {
 }
 
 func (c *cache) Close() {
-	// Trim anything > ~1yr old.
 	defer func() {
 		c.f.Close()
 		c.f = nil
 	}()
 
+	// Trim anything > ~1yr old.
 	one_year := time.Now().Unix() - (365 * 24 * 60 * 60)
 	for relFile, file := range c.root.Files {
 		if file.LastTested < one_year {
@@ -118,16 +130,12 @@ func (c *cache) Close() {
 		}
 	}
 	log.Printf("Saving Cache: %d entries.", c.root.CountMembers()-1)
-	data, err := json.Marshal(c.root)
-	if err != nil {
-		log.Printf("Failed to marshall internal state: %s", err)
-		return
-	}
-	if err = c.f.Truncate(0); err != nil {
+	if err := c.f.Truncate(0); err != nil {
 		log.Printf("Failed to truncate %s: %s", c.f.Name(), err)
 		return
 	}
-	if _, err = c.f.Write(data); err != nil {
+	e := gob.NewEncoder(c.f)
+	if err := e.Encode(c.root); err != nil {
 		log.Printf("Failed to write %s: %s", c.f.Name(), err)
 		return
 	}

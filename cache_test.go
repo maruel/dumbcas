@@ -38,6 +38,7 @@ func (c *mockCache) Close() {
 }
 
 func (a *ApplicationMock) LoadCache() (Cache, error) {
+	//return loadCache()
 	if a.cache == nil {
 		a.cache = &mockCache{&EntryCache{}, false, a.T, debug.Stack(), a.log}
 	} else {
@@ -55,6 +56,7 @@ func TestCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Make sure there's at least one entry in the cache. If not, archive something?
 	defer cache.Close()
 	if cache.Root() == nil {
 		t.Fatal(err)

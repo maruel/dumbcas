@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"testing"
 )
@@ -21,20 +22,20 @@ import (
 type mockCasTable struct {
 	entries  map[string][]byte
 	needFsck bool
-	*testing.T
+	t        *testing.T
+	log      *log.Logger
 }
 
 func (a *ApplicationMock) MakeCasTable(rootDir string) (CasTable, error) {
 	return makeCasTable(rootDir)
-	/*
-		if a.cas == nil {
-			a.cas = &mockCasTable{make(map[string][]byte), false, a.T}
-		}
-		return a.cas, nil
-	*/
+	if a.cas == nil {
+		a.cas = &mockCasTable{make(map[string][]byte), false, a.T, a.log}
+	}
+	return a.cas, nil
 }
 
 func (m *mockCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m.log.Printf("mockCasTable.ServeHTTP(%s)", r.URL.Path)
 	w.Write(m.entries[r.URL.Path[1:]])
 }
 
@@ -46,6 +47,7 @@ func (m *mockCasTable) Enumerate() <-chan CasEntry {
 		keys[i] = k
 		i++
 	}
+	m.log.Printf("mockCasTable.Enumerate() %d", len(keys))
 	c := make(chan CasEntry)
 	go func() {
 		for _, k := range keys {
@@ -56,20 +58,38 @@ func (m *mockCasTable) Enumerate() <-chan CasEntry {
 	return c
 }
 
-func (m *mockCasTable) AddEntry(source io.Reader, hash string) error {
+func (m *mockCasTable) AddEntry(source io.Reader, item string) error {
+	m.log.Printf("mockCasTable.AddEntry(%s)", item)
 	data, err := ioutil.ReadAll(source)
 	if err == nil {
-		m.entries[hash] = data
+		m.entries[item] = data
 	}
 	return err
 }
 
-func (m *mockCasTable) Open(hash string) (ReadSeekCloser, error) {
-	data, ok := m.entries[hash]
+func (m *mockCasTable) Open(item string) (ReadSeekCloser, error) {
+	m.log.Printf("mockCasTable.Open(%s)", item)
+	data, ok := m.entries[item]
 	if !ok {
-		return nil, fmt.Errorf("Missing: %s", hash)
+		return nil, fmt.Errorf("Missing: %s", item)
 	}
 	return Buffer{bytes.NewReader(data)}, nil
+}
+
+func (m *mockCasTable) Remove(item string) error {
+	m.log.Printf("mockCasTable.Remove(%s)", item)
+	delete(m.entries, item)
+	return nil
+}
+
+func (m *mockCasTable) NeedFsck() {
+	m.log.Printf("mockCasTable.NeedFsck()")
+	m.needFsck = true
+}
+
+func (m *mockCasTable) WarnIfFsckIsNeeded() bool {
+	m.log.Printf("mockCasTable.WarnIfFsckIsNeeded() %t", m.needFsck)
+	return m.needFsck
 }
 
 // Adds noop Close() to a bytes.Reader.
@@ -79,19 +99,6 @@ type Buffer struct {
 
 func (b Buffer) Close() error {
 	return nil
-}
-
-func (m *mockCasTable) Remove(item string) error {
-	delete(m.entries, item)
-	return nil
-}
-
-func (m *mockCasTable) NeedFsck() {
-	m.needFsck = true
-}
-
-func (m *mockCasTable) WarnIfFsckIsNeeded() bool {
-	return m.needFsck
 }
 
 func TestPrefixSpace(t *testing.T) {

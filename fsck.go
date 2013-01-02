@@ -62,7 +62,7 @@ func fsckMain(a DumbcasApplication) error {
 			}
 		}
 	}
-	a.GetLog().Printf("Scanned %d entries; found %d corrupted, %d invalid.", count, corrupted)
+	a.GetLog().Printf("Scanned %d entries; found %d corrupted.", count, corrupted)
 	return nil
 }
 

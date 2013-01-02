@@ -144,13 +144,13 @@ func (c *CommandMock) GetFlags() *flag.FlagSet {
 	return &c.flags
 }
 
-func makeMock(t *testing.T) *ApplicationMock {
+func makeMock(t *testing.T, verbose bool) *ApplicationMock {
 	a := &ApplicationMock{
 		DefaultApplication: application,
 		testing.T:          t,
 		closed:             make(chan bool),
 	}
-	if !enableOutput {
+	if !enableOutput && !verbose {
 		// Send the log to the test-specific buffer.
 		a.log = log.New(&a.bufLog, "", log.Lmicroseconds)
 	} else {
@@ -165,12 +165,11 @@ func makeMock(t *testing.T) *ApplicationMock {
 	return a
 }
 
-func baseInit(t *testing.T) *ApplicationMock {
+func baseInit(t *testing.T, verbose bool) *ApplicationMock {
 	// The test cases in this file are multi-thread safe. Comment out to ease
 	// debugging.
 	t.Parallel()
-
-	return makeMock(t)
+	return makeMock(t, verbose)
 }
 
 type tempStuff struct {
@@ -269,14 +268,14 @@ func (f *ApplicationMock) get404(url string) {
 }
 
 func TestHelp(t *testing.T) {
-	f := baseInit(t)
+	f := baseInit(t, false)
 	args := []string{"help"}
 	f.Run(args, 0)
 	f.checkBuffer(true, false)
 }
 
 func TestBadFlag(t *testing.T) {
-	f := baseInit(t)
+	f := baseInit(t, false)
 	args := []string{"archive", "-random"}
 	f.Run(args, 0)
 	// Prints to Stderr.
@@ -315,7 +314,7 @@ func runarchive(f *ApplicationMock) {
 
 func TestSmoke(t *testing.T) {
 	// End-to-end smoke test that tests archive, web, gc and fsck.
-	f := baseInit(t)
+	f := baseInit(t, false)
 	f.makeDirs()
 	defer f.cleanup()
 

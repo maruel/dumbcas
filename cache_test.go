@@ -10,6 +10,7 @@ limitations under the License. */
 package main
 
 import (
+	"log"
 	"runtime/debug"
 	"testing"
 )
@@ -19,6 +20,7 @@ type cacheMock struct {
 	closed   bool
 	t        *testing.T
 	creation []byte
+	log      *log.Logger
 }
 
 func (c *cacheMock) Root() *EntryCache {
@@ -37,7 +39,7 @@ func (c *cacheMock) Close() {
 
 func (a *ApplicationMock) LoadCache() (Cache, error) {
 	if a.cache == nil {
-		a.cache = &cacheMock{&EntryCache{}, false, a.T, debug.Stack()}
+		a.cache = &cacheMock{&EntryCache{}, false, a.T, debug.Stack(), a.log}
 	} else {
 		if a.cache.closed {
 			a.Fatalf("Was not closed properly; %s", a.cache.creation)

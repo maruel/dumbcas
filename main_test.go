@@ -108,6 +108,7 @@ type ApplicationMock struct {
 	// Statefullness
 	cache *mockCache
 	cas   CasTable
+	nodes NodesTable
 	// Optional stuff
 	tempArchive string
 	tempData    string

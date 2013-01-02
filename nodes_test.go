@@ -9,9 +9,49 @@ limitations under the License. */
 
 package main
 
-import ()
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"testing"
+)
 
-// TODO(maruel): Mock this function.
+type mockNodesTable struct {
+	entries map[string]*Node
+	cas     CasTable
+	t       *testing.T
+	log     *log.Logger
+}
+
 func (a *ApplicationMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
 	return loadNodesTable(rootDir, cas, a.GetLog())
+	if a.nodes == nil {
+		a.nodes = &mockNodesTable{make(map[string]*Node), a.cas, a.T, a.log}
+	}
+	return a.nodes, nil
+}
+
+func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m.log.Printf("mockNodesTable.ServeHTTP(%s)", r.URL.Path)
+	fmt.Fprintf(w, "TODO")
+	//w.Write(m.entries[r.URL.Path[1:]])
+}
+
+func (m *mockNodesTable) AddEntry(node *Node, name string) error {
+	m.log.Printf("mockNodesTable.AddEntry(%s)", name)
+	m.entries[name] = nil
+	return nil
+}
+
+func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
+	m.log.Printf("mockNodesTable.Enumerate() %d", len(m.entries))
+	c := make(chan NodeEntry)
+	go func() {
+		// TODO(maruel): Will blow up if mutated concurrently.
+		for k, v := range m.entries {
+			c <- NodeEntry{Path: k, Node: v, Entry: nil}
+		}
+		close(c)
+	}()
+	return c
 }

@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-type cacheMock struct {
+type mockCache struct {
 	root     *EntryCache
 	closed   bool
 	t        *testing.T
@@ -23,14 +23,14 @@ type cacheMock struct {
 	log      *log.Logger
 }
 
-func (c *cacheMock) Root() *EntryCache {
+func (c *mockCache) Root() *EntryCache {
 	if c.closed == true {
 		c.t.Fatal("Was unexpectedly closed")
 	}
 	return c.root
 }
 
-func (c *cacheMock) Close() {
+func (c *mockCache) Close() {
 	if c.closed == true {
 		c.t.Fatal("Was unexpectedly closed")
 	}
@@ -39,7 +39,7 @@ func (c *cacheMock) Close() {
 
 func (a *ApplicationMock) LoadCache() (Cache, error) {
 	if a.cache == nil {
-		a.cache = &cacheMock{&EntryCache{}, false, a.T, debug.Stack(), a.log}
+		a.cache = &mockCache{&EntryCache{}, false, a.T, debug.Stack(), a.log}
 	} else {
 		if a.cache.closed {
 			a.Fatalf("Was not closed properly; %s", a.cache.creation)

@@ -106,7 +106,7 @@ type ApplicationMock struct {
 	bufLog bytes.Buffer
 	log    *log.Logger
 	// Statefullness
-	cache *cacheMock
+	cache *mockCache
 	cas   CasTable
 	// Optional stuff
 	tempArchive string

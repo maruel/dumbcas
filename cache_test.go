@@ -10,30 +10,41 @@ limitations under the License. */
 package main
 
 import (
+	"runtime/debug"
 	"testing"
 )
 
 type cacheMock struct {
-	root   *EntryCache
-	closed bool
+	root     *EntryCache
+	closed   bool
+	t        *testing.T
+	creation []byte
 }
 
 func (c *cacheMock) Root() *EntryCache {
 	if c.closed == true {
-		panic("Oops")
+		c.t.Fatal("Was unexpectedly closed")
 	}
 	return c.root
 }
 
 func (c *cacheMock) Close() {
 	if c.closed == true {
-		panic("Oops")
+		c.t.Fatal("Was unexpectedly closed")
 	}
-	c.closed = true
+	c.closed = false
 }
 
 func (a *ApplicationMock) LoadCache() (Cache, error) {
-	return &cacheMock{&EntryCache{}, false}, nil
+	if a.cache == nil {
+		a.cache = &cacheMock{&EntryCache{}, false, a.T, debug.Stack()}
+	} else {
+		if a.cache.closed {
+			a.Fatalf("Was not closed properly; %s", a.cache.creation)
+		}
+		a.cache.closed = false
+	}
+	return a.cache, nil
 }
 
 func TestCache(t *testing.T) {

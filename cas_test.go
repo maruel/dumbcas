@@ -25,8 +25,13 @@ type mockCasTable struct {
 }
 
 func (a *ApplicationMock) MakeCasTable(rootDir string) (CasTable, error) {
-	//return &mockCasTable{make(map[string][]byte), false, a.T}, nil
 	return makeCasTable(rootDir)
+	/*
+		if a.cas == nil {
+			a.cas = &mockCasTable{make(map[string][]byte), false, a.T}
+		}
+		return a.cas, nil
+	*/
 }
 
 func (m *mockCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {

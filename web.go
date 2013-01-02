@@ -19,7 +19,7 @@ import (
 // Converts an handler to log every HTTP request.
 type LoggingHandler struct {
 	handler http.Handler
-	l       *log.Logger
+	log     *log.Logger
 }
 
 type loggingResponseWriter struct {
@@ -42,7 +42,7 @@ func (l *loggingResponseWriter) WriteHeader(status int) {
 func (l *LoggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l_w := &loggingResponseWriter{ResponseWriter: w}
 	l.handler.ServeHTTP(l_w, r)
-	l.l.Printf("%s - %3d %6db %4s %s",
+	l.log.Printf("%s - %3d %6db %4s %s",
 		r.RemoteAddr,
 		l_w.status,
 		l_w.length,

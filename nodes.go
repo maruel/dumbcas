@@ -56,7 +56,7 @@ type nodesTable struct {
 	cas      CasTable
 	maxItems int
 	hostname string
-	l        *log.Logger
+	log      *log.Logger
 	trash    Trash
 
 	mutex         sync.Mutex
@@ -74,7 +74,7 @@ type entryCache struct {
 	lastAccess time.Time
 }
 
-func loadNodesTable(rootDir string, cas CasTable, l *log.Logger) (NodesTable, error) {
+func loadNodesTable(rootDir string, cas CasTable, log *log.Logger) (NodesTable, error) {
 	nodesDir := path.Join(rootDir, nodesName)
 	if err := os.Mkdir(nodesDir, 0750); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("LoadNodesTable(%s): Failed to create %s: %s\n", rootDir, nodesDir, err)
@@ -90,7 +90,7 @@ func loadNodesTable(rootDir string, cas CasTable, l *log.Logger) (NodesTable, er
 		cas:           cas,
 		maxItems:      10,
 		hostname:      hostname,
-		l:             l,
+		log:           log,
 		trash:         MakeTrash(nodesDir),
 		recentNodes:   map[string]*nodeCache{},
 		recentEntries: map[string]*entryCache{},
@@ -125,7 +125,7 @@ func (n *nodesTable) AddEntry(node *Node, name string) error {
 			if _, err = f.Write(data); err != nil {
 				return fmt.Errorf("Failed to write %s: %s", f.Name(), err)
 			}
-			n.l.Printf("Saved node: %s", path.Join(monthName, nodeName))
+			n.log.Printf("Saved node: %s", path.Join(monthName, nodeName))
 			break
 		}
 	}

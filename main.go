@@ -36,11 +36,11 @@ type DumbcasApplication interface {
 
 type dumbapp struct {
 	DefaultApplication
-	l *log.Logger
+	log *log.Logger
 }
 
 func (d *dumbapp) GetLog() *log.Logger {
-	return d.l
+	return d.log
 }
 
 func (d *dumbapp) LoadCache() (Cache, error) {

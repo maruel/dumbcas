@@ -55,3 +55,24 @@ func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
 	}()
 	return c
 }
+
+func TestNodesTable(t *testing.T) {
+	t.Parallel()
+	tempData, err := makeTempDir("nodes")
+	if err != nil {
+		t.Fatalf("Failed to create tempdir", err)
+	}
+	defer removeTempDir(tempData)
+
+	log := getLog(false)
+	cas := &mockCasTable{make(map[string][]byte), false, t, log}
+	_, err = loadNodesTable(tempData, cas, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	/*
+		n.AddEntry()
+		n.Enumerate()
+		n.ServeHTTP()
+	*/
+}

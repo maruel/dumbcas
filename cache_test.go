@@ -77,17 +77,34 @@ func TestCachePath(t *testing.T) {
 }
 
 func TestCacheRedirected(t *testing.T) {
-	//t.Parallel()
+	t.Parallel()
 	tempData, err := makeTempDir("cache")
 	if err != nil {
 		t.Fatalf("Failed to create tempdir", err)
 	}
 	defer removeTempDir(tempData)
+	load := func() (Cache, error) {
+		return loadCacheInner(tempData)
+	}
+	testCacheImpl(t, load)
+}
+
+func TestCacheMock(t *testing.T) {
+	t.Parallel()
+	log := getLog(false)
+	mock := &mockCache{&EntryCache{}, false, t, nil, log}
+	load := func() (Cache, error) {
+		return mock, nil
+	}
+	testCacheImpl(t, load)
+}
+
+func testCacheImpl(t *testing.T, load func() (Cache, error)) {
 	now := time.Now().UTC().Unix()
 	{
-		c, err := loadCacheInner(tempData)
+		c, err := load()
 		if err != nil {
-			t.Fatalf("Failed to create tempdir", err)
+			t.Fatalf("Failed to create cache", err)
 		}
 		if c.Root().CountMembers() != 1 {
 			c.Root().Print(os.Stderr, "")
@@ -102,9 +119,9 @@ func TestCacheRedirected(t *testing.T) {
 		c.Close()
 	}
 	{
-		c, err := loadCacheInner(tempData)
+		c, err := load()
 		if err != nil {
-			t.Fatalf("Failed to load tempdir", err)
+			t.Fatalf("Failed to create cache", err)
 		}
 		if c.Root().CountMembers() != 2 {
 			c.Root().Print(os.Stderr, "")

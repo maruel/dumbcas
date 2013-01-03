@@ -11,14 +11,11 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
-	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -28,82 +25,11 @@ import (
 	"time"
 )
 
-// Logging is a global object so it can't be checked for when tests are run in parallel.
-var bufLog bytes.Buffer
-
-var enableOutput = false
-
-func init() {
-	// Reduces output. Comment out to get more logs.
-	if !enableOutput {
-		log.SetOutput(&bufLog)
-	}
-	log.SetFlags(log.Lmicroseconds)
-}
-
-func GetRandRune() rune {
-	chars := "0123456789abcdefghijklmnopqrstuvwxyz"
-	lengthBig := big.NewInt(int64(len(chars)))
-	val, err := rand.Int(rand.Reader, lengthBig)
-	if err != nil {
-		panic("Rand failed")
-	}
-	return rune(chars[int(val.Int64())])
-}
-
-// Creates a temporary directory.
-func makeTempDir(name string) (string, error) {
-	prefix := "dumbcas_" + name + "_"
-	length := 8
-	tempDir := os.TempDir()
-
-	ranPath := make([]rune, length)
-	for i := 0; i < length; i++ {
-		ranPath[i] = GetRandRune()
-	}
-	tempFull := path.Join(tempDir, prefix+string(ranPath))
-	for {
-		err := os.Mkdir(tempFull, 0700)
-		if os.IsExist(err) {
-			// Add another random character.
-			ranPath = append(ranPath, GetRandRune())
-		}
-		return tempFull, nil
-	}
-	return "", errors.New("Internal error")
-}
-
-func removeTempDir(tempDir string) {
-	if err := os.RemoveAll(tempDir); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to clean up %s", tempDir)
-	}
-}
-
-func createTree(rootDir string, tree map[string]string) error {
-	for relPath, content := range tree {
-		base := path.Dir(relPath)
-		if base != "." {
-			if err := os.MkdirAll(path.Join(rootDir, base), 0700); err != nil && !os.IsExist(err) {
-				return err
-			}
-		}
-		f, err := os.Create(path.Join(rootDir, relPath))
-		if err != nil {
-			return err
-		}
-		f.WriteString(content)
-		f.Sync()
-		f.Close()
-	}
-	return nil
-}
-
 type ApplicationMock struct {
 	DefaultApplication
 	*testing.T
 	bufOut bytes.Buffer
 	bufErr bytes.Buffer
-	bufLog bytes.Buffer
 	log    *log.Logger
 	// Statefullness
 	cache *mockCache
@@ -149,17 +75,9 @@ func makeMock(t *testing.T, verbose bool) *ApplicationMock {
 	a := &ApplicationMock{
 		DefaultApplication: application,
 		testing.T:          t,
+		log:                getLog(verbose),
 		closed:             make(chan bool),
 	}
-	if !enableOutput && !verbose {
-		// Send the log to the test-specific buffer.
-		a.log = log.New(&a.bufLog, "", log.Lmicroseconds)
-	} else {
-		// Send directly to output for test debugging.
-		a.log = log.New(os.Stderr, "", log.Lmicroseconds)
-	}
-	// Uncomment to send the log to the general buffer.
-	//a.log = log.New(&bufLog, "", log.Lmicroseconds)
 	for i, c := range a.Commands {
 		a.Commands[i] = &CommandMock{c, *c.GetFlags()}
 	}
@@ -171,9 +89,6 @@ func baseInit(t *testing.T, verbose bool) *ApplicationMock {
 	// debugging.
 	t.Parallel()
 	return makeMock(t, verbose)
-}
-
-type tempStuff struct {
 }
 
 func (f *ApplicationMock) checkBuffer(out, err bool) {

@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -40,15 +41,25 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.log.Printf("mockNodesTable.ServeHTTP(%s)", r.URL.Path)
 	suburl := r.URL.Path[1:]
 	if suburl == "" {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Yo dawg")
+		// The real implementation lists each directories independently.
+		items := make([]string, len(m.entries))
+		i := 0
+		for k, _ := range m.entries {
+			items[i] = k
+		}
+		dirList(w, items)
 		return
 	}
 	// Slow search, it's fine for a mock.
 	for k, v := range m.entries {
 		if strings.HasPrefix(k, suburl) {
 			// Found.
+			rest := suburl[len(k):]
+			if rest == "" {
+				// TODO(maruel): posix-specific.
+				localRedirect(w, r, path.Base(r.URL.Path)+"/")
+				return
+			}
 			f, err := m.cas.Open(v.Entry)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to load the entry file: %s", err), http.StatusNotFound)
@@ -61,7 +72,7 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Defer to the cas file system.
-			r.URL.Path = suburl[len(k)+1:]
+			r.URL.Path = rest[1:]
 			entryFs.ServeHTTP(w, r)
 		}
 	}
@@ -132,6 +143,18 @@ func TestNodesTableMock(t *testing.T) {
 	testNodesTableImpl(t, load)
 }
 
+func request(t *testing.T, nodes NodesTable, path string, expectedCode int) {
+	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBufferString("GET " + path + " HTTP/1.1\r\nHost: test\r\n\r\n")))
+	if err != nil {
+		t.Fatalf("%s: %s", path, err)
+	}
+	resp := httptest.NewRecorder()
+	nodes.ServeHTTP(resp, req)
+	if resp.Code != expectedCode {
+		t.Fatalf("%s: %d != %d", path, expectedCode, resp.Code)
+	}
+}
+
 func testNodesTableImpl(t *testing.T, load func() (NodesTable, error)) {
 	nodes, err := load()
 	if err != nil {
@@ -141,40 +164,24 @@ func testNodesTableImpl(t *testing.T, load func() (NodesTable, error)) {
 	for _ = range nodes.Enumerate() {
 		t.Fatal("Found unexpected value")
 	}
+
+	//cas.Add()
+
 	if err := nodes.AddEntry(&Node{"entry sha1", "comment"}, "name"); err != nil {
 		t.Fatal(err)
 	}
 	count := 0
+	//name := ""
 	for _ = range nodes.Enumerate() {
 		count += 1
+		//name = v.Path
 	}
 	if count != 2 {
 		t.Fatalf("Found %d items", count)
 	}
 
-	{
-		path := "/"
-		req, err := http.ReadRequest(bufio.NewReader(bytes.NewBufferString("GET " + path + " HTTP/1.1\r\nHost: test\r\n\r\n")))
-		if err != nil {
-			t.Errorf("%s", err)
-		}
-		resp := httptest.NewRecorder()
-		nodes.ServeHTTP(resp, req)
-		if resp.Code != 200 {
-			t.Fatal(resp.Code)
-		}
-	}
-
-	{
-		path := "/foo"
-		req, err := http.ReadRequest(bufio.NewReader(bytes.NewBufferString("GET " + path + " HTTP/1.1\r\nHost: test\r\n\r\n")))
-		if err != nil {
-			t.Errorf("%s", err)
-		}
-		resp := httptest.NewRecorder()
-		nodes.ServeHTTP(resp, req)
-		if resp.Code != 404 {
-			t.Fatal(resp.Code)
-		}
-	}
+	request(t, nodes, "/", 200)
+	request(t, nodes, "/foo", 404)
+	//request(t, nodes, "/"+name, 301)
+	//request(t, nodes, "/"+name + "/", 200)
 }

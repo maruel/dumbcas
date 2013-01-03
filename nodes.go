@@ -363,6 +363,7 @@ func (n *nodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if node != nil {
 		// Check manually for the root.
 		if rest == "" && name[len(name)-1] != '/' {
+			// TODO(maruel): posix-specific.
 			localRedirect(w, r, path.Base(r.URL.Path)+"/")
 			return
 		}

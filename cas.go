@@ -50,9 +50,11 @@ type CasTable interface {
 	// Removes an entry in the table.
 	Remove(item string) error
 	// Sets the bit that the table needs to be checked for consistency.
-	NeedFsck()
+	SetFsckBit()
 	// Returns if the fsck bit is set.
-	WarnIfFsckIsNeeded() bool
+	GetFsckBit() bool
+	// Clears the fsck bit.
+	ClearFsckBit()
 }
 
 type ReadSeekCloser interface {
@@ -155,7 +157,7 @@ func (c *casTable) Enumerate() <-chan CasEntry {
 				}
 				if !rePrefix.MatchString(prefix) {
 					c.trash.Move(prefix)
-					c.NeedFsck()
+					c.SetFsckBit()
 					continue
 				}
 				// TODO(maruel): No need to read all at once.
@@ -163,13 +165,13 @@ func (c *casTable) Enumerate() <-chan CasEntry {
 				subitems, err := readDirNames(prefixPath)
 				if err != nil {
 					items <- CasEntry{Error: fmt.Errorf("Failed reading %s", prefixPath)}
-					c.NeedFsck()
+					c.SetFsckBit()
 					continue
 				}
 				for _, item := range subitems {
 					if !reRest.MatchString(item) {
 						c.trash.Move(path.Join(prefix, item))
-						c.NeedFsck()
+						c.SetFsckBit()
 						continue
 					}
 					items <- CasEntry{Item: prefix + item}
@@ -205,8 +207,7 @@ func (c *casTable) Open(hash string) (ReadSeekCloser, error) {
 	return os.Open(fp)
 }
 
-// Signals that an fsck is required.
-func (c *casTable) NeedFsck() {
+func (c *casTable) SetFsckBit() {
 	log.Printf("Marking for fsck")
 	f, _ := os.Create(path.Join(c.casDir, needFsckName))
 	if f != nil {
@@ -214,14 +215,18 @@ func (c *casTable) NeedFsck() {
 	}
 }
 
-func (c *casTable) WarnIfFsckIsNeeded() bool {
+func (c *casTable) GetFsckBit() bool {
 	f, _ := os.Open(path.Join(c.casDir, needFsckName))
 	if f == nil {
 		return false
 	}
-	defer f.Close()
-	fmt.Fprintf(os.Stderr, "WARNING: fsck is needed.")
+	f.Close()
 	return true
+}
+
+func (c *casTable) ClearFsckBit() {
+	// Ignore the error.
+	os.Remove(path.Join(c.casDir, needFsckName))
 }
 
 func (c *casTable) Remove(hash string) error {

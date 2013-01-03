@@ -179,7 +179,7 @@ func (n *nodesTable) Enumerate() <-chan NodeEntry {
 				node := &Node{}
 				if err := loadFileAsJson(v.FullPath, node); err != nil {
 					n.trash.Move(relPath)
-					n.cas.NeedFsck()
+					n.cas.SetFsckBit()
 					items <- NodeEntry{Error: fmt.Errorf("Failed reading %s", relPath)}
 					continue
 				}
@@ -194,13 +194,13 @@ func (n *nodesTable) Enumerate() <-chan NodeEntry {
 func LoadEntry(cas CasTable, hash string) (*Entry, error) {
 	f, err := cas.Open(hash)
 	if err != nil {
-		cas.NeedFsck()
+		cas.SetFsckBit()
 		return nil, fmt.Errorf("Invalid entry name: %s", hash)
 	}
 	defer f.Close()
 	entry := &Entry{}
 	if err := loadReaderAsJson(f, entry); err != nil {
-		cas.NeedFsck()
+		cas.SetFsckBit()
 		return nil, fmt.Errorf("Failed reading entry %s", hash)
 	}
 	return entry, nil
@@ -386,7 +386,7 @@ func (n *nodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Either failed to load a Node or an Entry.
 func (n *nodesTable) corruption(w http.ResponseWriter, format string, a ...interface{}) {
-	n.cas.NeedFsck()
+	n.cas.SetFsckBit()
 	str := fmt.Sprintf(format, a...)
 	http.Error(w, "Internal failure: "+str, http.StatusNotImplemented)
 }

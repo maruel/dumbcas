@@ -45,7 +45,7 @@ func gcMain(a DumbcasApplication) error {
 	for item := range cas.Enumerate() {
 		if item.Error != nil {
 			// TODO(maruel): Leaks channel.
-			cas.NeedFsck()
+			cas.SetFsckBit()
 			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)
 		}
 		entries[item.Item] = false
@@ -75,7 +75,7 @@ func gcMain(a DumbcasApplication) error {
 	a.GetLog().Printf("Found %d orphan", len(orphans))
 	for _, orphan := range orphans {
 		if err := cas.Remove(orphan); err != nil {
-			cas.NeedFsck()
+			cas.SetFsckBit()
 			return fmt.Errorf("Internal error while removing %s: %s", orphan, err)
 		}
 	}

@@ -82,14 +82,19 @@ func (m *mockCasTable) Remove(item string) error {
 	return nil
 }
 
-func (m *mockCasTable) NeedFsck() {
-	m.log.Printf("mockCasTable.NeedFsck()")
+func (m *mockCasTable) SetFsckBit() {
+	m.log.Printf("mockCasTable.SetFsckBit()")
 	m.needFsck = true
 }
 
-func (m *mockCasTable) WarnIfFsckIsNeeded() bool {
-	m.log.Printf("mockCasTable.WarnIfFsckIsNeeded() %t", m.needFsck)
+func (m *mockCasTable) GetFsckBit() bool {
+	m.log.Printf("mockCasTable.GetFsckBit() %t", m.needFsck)
 	return m.needFsck
+}
+
+func (m *mockCasTable) ClearFsckBit() {
+	m.log.Printf("mockCasTable.ClearFsckBit()")
+	m.needFsck = false
 }
 
 // Adds noop Close() to a bytes.Reader.
@@ -170,5 +175,17 @@ func testCasTableImpl(t *testing.T, cas CasTable) {
 	}
 	if count != 1 {
 		t.Fatalf("Found %d items", count)
+	}
+
+	if cas.GetFsckBit() {
+		t.Fatal("Unexpected")
+	}
+	cas.SetFsckBit()
+	if !cas.GetFsckBit() {
+		t.Fatal("Unexpected")
+	}
+	cas.ClearFsckBit()
+	if cas.GetFsckBit() {
+		t.Fatal("Unexpected")
 	}
 }

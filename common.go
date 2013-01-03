@@ -52,8 +52,11 @@ func CommonFlag(d DumbcasApplication, createRoot bool, bypassFsck bool) (CasTabl
 	if err != nil {
 		return nil, nil, err
 	}
-	if cas.WarnIfFsckIsNeeded() && !bypassFsck {
-		return nil, nil, fmt.Errorf("Can't run if fsck is needed. Please run fsck first.")
+	if cas.GetFsckBit() {
+		if !bypassFsck {
+			return nil, nil, fmt.Errorf("Can't run if fsck is needed. Please run fsck first.")
+		}
+		fmt.Fprintf(os.Stderr, "WARNING: fsck is needed.")
 	}
 	nodes, err := d.LoadNodesTable(Root, cas)
 	if err != nil {

@@ -117,10 +117,7 @@ func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
 
 func TestNodesTable(t *testing.T) {
 	t.Parallel()
-	tempData, err := makeTempDir("nodes")
-	if err != nil {
-		t.Fatalf("Failed to create tempdir", err)
-	}
+	tempData := makeTempDir(t, "nodes")
 	defer removeTempDir(tempData)
 
 	log := getLog(false)

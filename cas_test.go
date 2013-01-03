@@ -142,10 +142,7 @@ func TestPrefixSpace(t *testing.T) {
 
 func TestCasTableImpl(t *testing.T) {
 	t.Parallel()
-	tempData, err := makeTempDir("cas")
-	if err != nil {
-		t.Fatalf("Failed to create tempdir", err)
-	}
+	tempData := makeTempDir(t, "cas")
 	defer removeTempDir(tempData)
 
 	cas, err := makeCasTable(tempData)

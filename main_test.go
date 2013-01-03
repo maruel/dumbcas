@@ -66,19 +66,10 @@ func baseInit(t *testing.T, verbose bool) *DumbcasAppMock {
 }
 
 func (f *DumbcasAppMock) makeDirs() {
-	tempData, err := makeTempDir("data")
-	if err != nil {
-		f.Fatalf("Failed to create data dir: %s", err)
-	} else {
-		f.tempData = tempData
-	}
-	tempArchive, err := makeTempDir("out")
-	if err != nil {
-		f.Fatalf("Failed to create archive dir: %s", err)
-	} else {
-		f.tempArchive = tempArchive
-	}
+	f.tempData = makeTempDir(f.ApplicationMock.T, "data")
+	f.tempArchive = makeTempDir(f.ApplicationMock.T, "out")
 }
+
 func (f *DumbcasAppMock) cleanup() {
 	if f.tempArchive != "" {
 		removeTempDir(f.tempArchive)

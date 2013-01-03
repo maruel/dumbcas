@@ -12,12 +12,12 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"log"
 	"math/big"
 	"os"
 	"path"
+	"testing"
 )
 
 // Logging is a global object so it can't be checked for when tests are run in parallel.
@@ -44,7 +44,7 @@ func GetRandRune() rune {
 }
 
 // Creates a temporary directory.
-func makeTempDir(name string) (string, error) {
+func makeTempDir(t *testing.T, name string) string {
 	prefix := "dumbcas_" + name + "_"
 	length := 8
 	tempDir := os.TempDir()
@@ -60,9 +60,10 @@ func makeTempDir(name string) (string, error) {
 			// Add another random character.
 			ranPath = append(ranPath, GetRandRune())
 		}
-		return tempFull, nil
+		return tempFull
 	}
-	return "", errors.New("Internal error")
+	t.Fatal("Internal error")
+	return ""
 }
 
 func removeTempDir(tempDir string) {

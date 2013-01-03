@@ -78,10 +78,7 @@ func TestCachePath(t *testing.T) {
 
 func TestCacheRedirected(t *testing.T) {
 	t.Parallel()
-	tempData, err := makeTempDir("cache")
-	if err != nil {
-		t.Fatalf("Failed to create tempdir", err)
-	}
+	tempData := makeTempDir(t, "cache")
 	defer removeTempDir(tempData)
 	load := func() (Cache, error) {
 		return loadCacheInner(tempData)

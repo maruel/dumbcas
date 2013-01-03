@@ -10,8 +10,6 @@ limitations under the License. */
 package main
 
 import (
-	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -25,12 +23,9 @@ import (
 	"time"
 )
 
-type ApplicationMock struct {
-	DefaultApplication
-	*testing.T
-	bufOut bytes.Buffer
-	bufErr bytes.Buffer
-	log    *log.Logger
+type DumbcasAppMock struct {
+	ApplicationMock
+	log *log.Logger
 	// Statefullness
 	cache *mockCache
 	cas   CasTable
@@ -43,82 +38,34 @@ type ApplicationMock struct {
 	baseUrl     string
 }
 
-func (a *ApplicationMock) GetOut() io.Writer {
-	return &a.bufOut
-}
-
-func (a *ApplicationMock) GetErr() io.Writer {
-	return &a.bufErr
-}
-
-func (a *ApplicationMock) GetLog() *log.Logger {
+func (a *DumbcasAppMock) GetLog() *log.Logger {
 	return a.log
 }
 
-func (a *ApplicationMock) Run(args []string, expected int) {
+func (a *DumbcasAppMock) Run(args []string, expected int) {
 	a.GetLog().Printf("%s", args)
 	if returncode := Run(a, args); returncode != expected {
 		a.Fatal("Unexpected return code", returncode)
 	}
 }
 
-type CommandMock struct {
-	Command
-	flags flag.FlagSet
-}
-
-func (c *CommandMock) GetFlags() *flag.FlagSet {
-	return &c.flags
-}
-
-func makeMock(t *testing.T, verbose bool) *ApplicationMock {
-	a := &ApplicationMock{
-		DefaultApplication: application,
-		testing.T:          t,
-		log:                getLog(verbose),
-		closed:             make(chan bool),
-	}
-	for i, c := range a.Commands {
-		a.Commands[i] = &CommandMock{c, *c.GetFlags()}
+func makeDumbcasMock(t *testing.T, verbose bool) *DumbcasAppMock {
+	a := &DumbcasAppMock{
+		ApplicationMock: *makeAppMock(t),
+		log:             getLog(verbose),
+		closed:          make(chan bool),
 	}
 	return a
 }
 
-func baseInit(t *testing.T, verbose bool) *ApplicationMock {
+func baseInit(t *testing.T, verbose bool) *DumbcasAppMock {
 	// The test cases in this file are multi-thread safe. Comment out to ease
 	// debugging.
 	t.Parallel()
-	return makeMock(t, verbose)
+	return makeDumbcasMock(t, verbose)
 }
 
-func (f *ApplicationMock) checkBuffer(out, err bool) {
-	if out {
-		/*
-			if f.bufOut.Len() == 0 {
-				// Print Stderr to see what happened.
-				f.Fatal("Expected buffer; " + f.bufErr.String())
-			}
-		*/
-	} else {
-		if f.bufOut.Len() != 0 {
-			f.Fatalf("Unexpected buffer:\n%s", f.bufOut.String())
-		}
-	}
-
-	if err {
-		if f.bufErr.Len() == 0 {
-			f.Fatal("Expected buffer; " + f.bufOut.String())
-		}
-	} else {
-		if f.bufErr.Len() != 0 {
-			f.Fatal("Unexpected buffer: " + f.bufErr.String())
-		}
-	}
-	f.bufOut.Reset()
-	f.bufErr.Reset()
-}
-
-func (f *ApplicationMock) makeDirs() {
+func (f *DumbcasAppMock) makeDirs() {
 	tempData, err := makeTempDir("data")
 	if err != nil {
 		f.Fatalf("Failed to create data dir: %s", err)
@@ -132,7 +79,7 @@ func (f *ApplicationMock) makeDirs() {
 		f.tempArchive = tempArchive
 	}
 }
-func (f *ApplicationMock) cleanup() {
+func (f *DumbcasAppMock) cleanup() {
 	if f.tempArchive != "" {
 		removeTempDir(f.tempArchive)
 	}
@@ -141,7 +88,7 @@ func (f *ApplicationMock) cleanup() {
 	}
 }
 
-func (f *ApplicationMock) goWeb() {
+func (f *DumbcasAppMock) goWeb() {
 	if f.socket != nil {
 		f.Fatal("Socket is empty")
 	}
@@ -154,7 +101,7 @@ func (f *ApplicationMock) goWeb() {
 	f.baseUrl = fmt.Sprintf("http://%s", f.socket.Addr().String())
 }
 
-func (f *ApplicationMock) closeWeb() {
+func (f *DumbcasAppMock) closeWeb() {
 	f.socket.Close()
 	f.socket = nil
 	f.baseUrl = ""
@@ -162,7 +109,7 @@ func (f *ApplicationMock) closeWeb() {
 	f.checkBuffer(false, false)
 }
 
-func (f *ApplicationMock) get(url string, expectedUrl string) *http.Response {
+func (f *DumbcasAppMock) get(url string, expectedUrl string) *http.Response {
 	r, err := http.Get(f.baseUrl + url)
 	if err != nil {
 		f.Fatal(err)
@@ -173,7 +120,7 @@ func (f *ApplicationMock) get(url string, expectedUrl string) *http.Response {
 	return r
 }
 
-func (f *ApplicationMock) get404(url string) {
+func (f *DumbcasAppMock) get404(url string) {
 	r, err := http.Get(f.baseUrl + url)
 	if err != nil {
 		f.Fatal(err)
@@ -181,21 +128,6 @@ func (f *ApplicationMock) get404(url string) {
 	if r.StatusCode != 404 {
 		f.Fatal(r.StatusCode, r.Body)
 	}
-}
-
-func TestHelp(t *testing.T) {
-	f := baseInit(t, false)
-	args := []string{"help"}
-	f.Run(args, 0)
-	f.checkBuffer(true, false)
-}
-
-func TestBadFlag(t *testing.T) {
-	f := baseInit(t, false)
-	args := []string{"archive", "-random"}
-	f.Run(args, 0)
-	// Prints to Stderr.
-	f.checkBuffer(false, true)
 }
 
 func readBody(t *testing.T, r *http.Response) string {
@@ -222,7 +154,7 @@ func sha1Map(in map[string]string) map[string]string {
 	return out
 }
 
-func runarchive(f *ApplicationMock) {
+func runarchive(f *DumbcasAppMock) {
 	args := []string{"archive", "-root=" + f.tempArchive, path.Join(f.tempData, "toArchive")}
 	f.Run(args, 0)
 	f.checkBuffer(true, false)

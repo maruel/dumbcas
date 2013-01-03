@@ -40,7 +40,7 @@ func (c *mockCache) Close() {
 	c.closed = false
 }
 
-func (a *ApplicationMock) LoadCache() (Cache, error) {
+func (a *DumbcasAppMock) LoadCache() (Cache, error) {
 	//return loadCache()
 	if a.cache == nil {
 		a.cache = &mockCache{&EntryCache{}, false, a.T, debug.Stack(), a.log}

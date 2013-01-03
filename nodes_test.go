@@ -31,7 +31,7 @@ type mockNodesTable struct {
 	log     *log.Logger
 }
 
-func (a *ApplicationMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
+func (a *DumbcasAppMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
 	return loadNodesTable(rootDir, cas, a.GetLog())
 	if a.nodes == nil {
 		a.nodes = &mockNodesTable{make(map[string]Node), a.cas, a.T, a.log}

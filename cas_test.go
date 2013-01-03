@@ -27,7 +27,7 @@ type mockCasTable struct {
 	log      *log.Logger
 }
 
-func (a *ApplicationMock) MakeCasTable(rootDir string) (CasTable, error) {
+func (a *DumbcasAppMock) MakeCasTable(rootDir string) (CasTable, error) {
 	return makeCasTable(rootDir)
 	if a.cas == nil {
 		a.cas = &mockCasTable{make(map[string][]byte), false, a.T, a.log}

@@ -12,10 +12,13 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 type mockNodesTable struct {
@@ -35,48 +38,57 @@ func (a *ApplicationMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTab
 
 func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.log.Printf("mockNodesTable.ServeHTTP(%s)", r.URL.Path)
-	_, ok := m.entries[r.URL.Path[1:]]
-	if !ok {
-		http.Error(w, "Yo dawg", http.StatusNotFound)
+	suburl := r.URL.Path[1:]
+	if suburl == "" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "Yo dawg")
 		return
 	}
-	// Defer to the cas file system.
-	//w.Write(item.asJson)
+	// Slow search, it's fine for a mock.
+	for k, v := range m.entries {
+		if strings.HasPrefix(k, suburl) {
+			// Found.
+			f, err := m.cas.Open(v.Entry)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to load the entry file: %s", err), http.StatusNotFound)
+				return
+			}
+			defer f.Close()
+			entryFs := EntryFileSystem{cas: m.cas}
+			if err := loadReaderAsJson(f, &entryFs.entry); err != nil {
+				http.Error(w, fmt.Sprintf("Failed to load the entry file: %s", err), http.StatusNotFound)
+				return
+			}
+			// Defer to the cas file system.
+			r.URL.Path = suburl[len(k)+1:]
+			entryFs.ServeHTTP(w, r)
+		}
+	}
+	http.Error(w, "Yo dawg", http.StatusNotFound)
 }
 
 func (m *mockNodesTable) AddEntry(node *Node, name string) error {
 	m.log.Printf("mockNodesTable.AddEntry(%s)", name)
-	m.entries[name] = *node
-	/*
-		now := time.Now().UTC()
-		// Create one directory store per month.
-		monthName := now.Format("2006-01")
-		monthDir := path.Join(n.nodesDir, monthName)
-		if err := os.MkdirAll(monthDir, 0750); err != nil && !os.IsExist(err) {
-			return fmt.Errorf("Failed to create %s: %s\n", monthDir, err)
-		}
 
-		suffix := 0
-		nodePath := ""
-		for {
-			nodeName := n.hostname + "_" + now.Format("2006-01-02_15-04-05") + "_" + name
-			if suffix != 0 {
-				nodeName += fmt.Sprintf("(%d)", suffix)
-			}
-			nodePath = path.Join(monthDir, nodeName)
-			f, err := os.OpenFile(nodePath, os.O_WRONLY|os.O_EXCL|os.O_CREATE, 0640)
-			if err != nil {
-				// Try ad nauseam.
-				suffix += 1
-			} else {
-				if _, err = f.Write(data); err != nil {
-					return fmt.Errorf("Failed to write %s: %s", f.Name(), err)
-				}
-				n.log.Printf("Saved node: %s", path.Join(monthName, nodeName))
-				break
-			}
+	now := time.Now().UTC()
+	monthName := now.Format("2006-01")
+
+	suffix := 0
+	for {
+		nodeName := now.Format("2006-01-02_15-04-05") + "_" + name
+		if suffix != 0 {
+			nodeName += fmt.Sprintf("(%d)", suffix)
 		}
-	*/
+		nodePath := monthName + "/" + nodeName
+		if _, ok := m.entries[nodePath]; !ok {
+			m.entries[nodePath] = *node
+			break
+		}
+		// Try ad nauseam.
+		suffix += 1
+	}
+	m.entries[tagsName+"/"+name] = *node
 	return nil
 }
 
@@ -86,7 +98,6 @@ func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
 	go func() {
 		// TODO(maruel): Will blow up if mutated concurrently.
 		for k, v := range m.entries {
-			// The comment was discarded.
 			c <- NodeEntry{Path: k, Node: &v, Entry: nil}
 		}
 		close(c)
@@ -110,7 +121,6 @@ func TestNodesTable(t *testing.T) {
 	testNodesTableImpl(t, load)
 }
 
-/*
 func TestNodesTableMock(t *testing.T) {
 	t.Parallel()
 	log := getLog(false)
@@ -121,7 +131,6 @@ func TestNodesTableMock(t *testing.T) {
 	}
 	testNodesTableImpl(t, load)
 }
-*/
 
 func testNodesTableImpl(t *testing.T, load func() (NodesTable, error)) {
 	nodes, err := load()
@@ -139,8 +148,7 @@ func testNodesTableImpl(t *testing.T, load func() (NodesTable, error)) {
 	for _ = range nodes.Enumerate() {
 		count += 1
 	}
-	// TODO(maruel): The real implementation will return 2, the mock will return 1.
-	if count == 0 {
+	if count != 2 {
 		t.Fatalf("Found %d items", count)
 	}
 

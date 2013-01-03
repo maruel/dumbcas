@@ -127,3 +127,48 @@ func TestPrefixSpace(t *testing.T) {
 		}
 	}
 }
+
+func TestCasTableImpl(t *testing.T) {
+	t.Parallel()
+	tempData, err := makeTempDir("cas")
+	if err != nil {
+		t.Fatalf("Failed to create tempdir", err)
+	}
+	defer removeTempDir(tempData)
+
+	cas, err := makeCasTable(tempData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testCasTableImpl(t, cas)
+}
+
+func TestCasTableNode(t *testing.T) {
+	t.Parallel()
+
+	log := getLog(false)
+	cas := &mockCasTable{make(map[string][]byte), false, t, log}
+	testCasTableImpl(t, cas)
+}
+
+func testCasTableImpl(t *testing.T, cas CasTable) {
+	for _ = range cas.Enumerate() {
+		t.Fatal("Found unexpected value")
+	}
+
+	file1, err := AddBytes(cas, []byte("content1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count := 0
+	for v := range cas.Enumerate() {
+		if v.Item != file1 {
+			t.Fatal("Found unexpected value")
+		}
+		count++
+	}
+	if count != 1 {
+		t.Fatalf("Found %d items", count)
+	}
+}

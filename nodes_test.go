@@ -125,22 +125,19 @@ func TestNodesTable(t *testing.T) {
 
 	log := getLog(false)
 	cas := &mockCasTable{make(map[string][]byte), false, t, log}
-	load := func() (NodesTable, error) {
-		return loadNodesTable(tempData, cas, log)
+	nodes, err := loadNodesTable(tempData, cas, log)
+	if err != nil {
+		t.Fatal(err)
 	}
-	testNodesTableImpl(t, cas, load)
+	testNodesTableImpl(t, cas, nodes)
 }
 
 func TestNodesTableMock(t *testing.T) {
 	t.Parallel()
 	log := getLog(false)
 	cas := &mockCasTable{make(map[string][]byte), false, t, log}
-	// The object needs to be stateful so it doesn't lose its data.
 	nodes := &mockNodesTable{make(map[string]Node), cas, t, log}
-	load := func() (NodesTable, error) {
-		return nodes, nil
-	}
-	testNodesTableImpl(t, cas, load)
+	testNodesTableImpl(t, cas, nodes)
 }
 
 func request(t *testing.T, nodes NodesTable, path string, expectedCode int, expectedBody string) {
@@ -164,12 +161,7 @@ func request(t *testing.T, nodes NodesTable, path string, expectedCode int, expe
 	}
 }
 
-func testNodesTableImpl(t *testing.T, cas CasTable, load func() (NodesTable, error)) {
-	nodes, err := load()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {
 	for _ = range nodes.Enumerate() {
 		t.Fatal("Found unexpected value")
 	}

@@ -16,6 +16,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"testing"
 )
 
@@ -60,6 +61,9 @@ func (m *mockCasTable) Enumerate() <-chan CasEntry {
 
 func (m *mockCasTable) AddEntry(source io.Reader, item string) error {
 	m.log.Printf("mockCasTable.AddEntry(%s)", item)
+	if _, ok := m.entries[item]; ok {
+		return os.ErrExist
+	}
 	data, err := ioutil.ReadAll(source)
 	if err == nil {
 		m.entries[item] = data
@@ -78,6 +82,9 @@ func (m *mockCasTable) Open(item string) (ReadSeekCloser, error) {
 
 func (m *mockCasTable) Remove(item string) error {
 	m.log.Printf("mockCasTable.Remove(%s)", item)
+	if _, ok := m.entries[item]; !ok {
+		return os.ErrNotExist
+	}
 	delete(m.entries, item)
 	return nil
 }
@@ -177,6 +184,49 @@ func testCasTableImpl(t *testing.T, cas CasTable) {
 		t.Fatalf("Found %d items", count)
 	}
 
+	// Add the same content.
+	file2, err := AddBytes(cas, []byte("content1"))
+	if !os.IsExist(err) {
+		t.Fatal(err)
+	}
+	if file1 != file2 {
+		t.Fatal("Hash mismatch")
+	}
+	count = 0
+	for v := range cas.Enumerate() {
+		if v.Item != file1 {
+			t.Fatal("Found unexpected value")
+		}
+		count++
+	}
+	if count != 1 {
+		t.Fatalf("Found %d items", count)
+	}
+
+	f, err := cas.Open(file1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := ioutil.ReadAll(f)
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "content1" {
+		t.Fatal(string(data))
+	}
+	_, err = cas.Open("0")
+	if err == nil {
+		t.Fatal("Unexpected success")
+	}
+	if err := cas.Remove(file1); err != nil {
+		t.Fatal(err)
+	}
+	if err := cas.Remove(file1); err == nil {
+		t.Fatal("Unexpected success")
+	}
+
+	// Test fsck bit.
 	if cas.GetFsckBit() {
 		t.Fatal("Unexpected")
 	}
@@ -188,4 +238,5 @@ func testCasTableImpl(t *testing.T, cas CasTable) {
 	if cas.GetFsckBit() {
 		t.Fatal("Unexpected")
 	}
+
 }

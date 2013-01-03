@@ -11,8 +11,11 @@ package main
 
 import (
 	"log"
+	"os"
+	"path/filepath"
 	"runtime/debug"
 	"testing"
+	"time"
 )
 
 type mockCache struct {
@@ -50,15 +53,68 @@ func (a *ApplicationMock) LoadCache() (Cache, error) {
 	return a.cache, nil
 }
 
-func TestCache(t *testing.T) {
+func TestCacheNormal(t *testing.T) {
 	t.Parallel()
 	cache, err := loadCache()
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Make sure there's at least one entry in the cache. If not, archive something?
 	defer cache.Close()
 	if cache.Root() == nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCachePath(t *testing.T) {
+	t.Parallel()
+	p, err := getCachePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(p) {
+		t.Fatal(p)
+	}
+}
+
+func TestCacheRedirected(t *testing.T) {
+	//t.Parallel()
+	tempData, err := makeTempDir("cache")
+	if err != nil {
+		t.Fatalf("Failed to create tempdir", err)
+	}
+	defer removeTempDir(tempData)
+	now := time.Now().UTC().Unix()
+	{
+		c, err := loadCacheInner(tempData)
+		if err != nil {
+			t.Fatalf("Failed to create tempdir", err)
+		}
+		if c.Root().CountMembers() != 1 {
+			c.Root().Print(os.Stderr, "")
+			t.Fatalf("Oops: %d", c.Root().CountMembers())
+		}
+		if c.Root().Files != nil {
+			c.Root().Print(os.Stderr, "")
+			t.Fatalf("Oops: %d", c.Root().CountMembers())
+		}
+		c.Root().Files = make(map[string]*EntryCache)
+		c.Root().Files["foo"] = &EntryCache{Sha1: "x", Size: 1, Timestamp: 2, LastTested: now}
+		c.Close()
+	}
+	{
+		c, err := loadCacheInner(tempData)
+		if err != nil {
+			t.Fatalf("Failed to load tempdir", err)
+		}
+		if c.Root().CountMembers() != 2 {
+			c.Root().Print(os.Stderr, "")
+			t.Fatalf("Oops: %d", c.Root().CountMembers())
+		}
+		foo := c.Root().Files["foo"]
+		if foo.Sha1 != "x" || foo.Size != 1 || foo.Timestamp != 2 || foo.LastTested != now {
+			c.Root().Print(os.Stderr, "")
+			t.Fatalf("Oops: %d", c.Root().CountMembers())
+		}
+		c.Close()
 	}
 }

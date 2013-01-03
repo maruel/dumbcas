@@ -73,16 +73,27 @@ type Cache interface {
 	Close()
 }
 
+func getCachePath() (string, error) {
+	usr, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	return path.Join(usr.HomeDir, ".dumbcas"), nil
+}
+
 // Loads the cache from ~/.dumbcas/cache.json and keeps it open until the call
 // to Save().
 // TODO(maruel): Ensure proper file locking. One way is to always create a new
 // file when adding data and then periodically garbage-collect the files.
 func loadCache() (Cache, error) {
-	usr, err := user.Current()
+	cacheDir, err := getCachePath()
 	if err != nil {
 		return nil, err
 	}
-	cacheDir := path.Join(usr.HomeDir, ".dumbcas")
+	return loadCacheInner(cacheDir)
+}
+
+func loadCacheInner(cacheDir string) (Cache, error) {
 	if err := os.Mkdir(cacheDir, 0700); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("Failed to access %s: %s", cacheDir, err)
 	}

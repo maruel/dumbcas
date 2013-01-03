@@ -11,7 +11,6 @@ package main
 
 import (
 	"fmt"
-	"html"
 	"io"
 	"log"
 	"net/http"
@@ -126,20 +125,14 @@ func (e *EntryFileSystem) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Entry) ServeDir(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	io.WriteString(w, "<html><body><pre>")
-	names := make([]string, 0, len(e.Files))
+	names := make([]string, len(e.Files))
+	i := 0
 	for name, entry := range e.Files {
 		if entry.isDir() {
 			name = name + "/"
 		}
-		name = html.EscapeString(name)
-		names = append(names, name)
+		names[i] = name
+		i++
 	}
-	sort.Strings(names)
-	for _, name := range names {
-		fmt.Fprintf(w, "<a href=\"%s\">%s</a>\n", name, name)
-	}
-	io.WriteString(w, "</pre></body></html>")
+	dirList(w, names)
 }

@@ -46,6 +46,7 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		i := 0
 		for k, _ := range m.entries {
 			items[i] = k
+			i++
 		}
 		dirList(w, items)
 		return

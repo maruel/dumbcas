@@ -59,7 +59,11 @@ func gcMain(a DumbcasApplication) error {
 			return item.Error
 		}
 		entries[item.Node.Entry] = true
-		TagRecurse(entries, item.Entry)
+		entry, err := LoadEntry(cas, item.Node.Entry)
+		if err != nil {
+			return err
+		}
+		TagRecurse(entries, entry)
 	}
 
 	orphans := []string{}

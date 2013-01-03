@@ -12,7 +12,9 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -53,7 +55,7 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// Slow search, it's fine for a mock.
 	for k, v := range m.entries {
-		if strings.HasPrefix(k, suburl) {
+		if strings.HasPrefix(suburl, k) {
 			// Found.
 			rest := suburl[len(k):]
 			if rest == "" {
@@ -61,20 +63,16 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				localRedirect(w, r, path.Base(r.URL.Path)+"/")
 				return
 			}
-			f, err := m.cas.Open(v.Entry)
+			entry, err := LoadEntry(m.cas, v.Entry)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to load the entry file: %s", err), http.StatusNotFound)
 				return
 			}
-			defer f.Close()
-			entryFs := EntryFileSystem{cas: m.cas}
-			if err := loadReaderAsJson(f, &entryFs.entry); err != nil {
-				http.Error(w, fmt.Sprintf("Failed to load the entry file: %s", err), http.StatusNotFound)
-				return
-			}
 			// Defer to the cas file system.
-			r.URL.Path = rest[1:]
+			r.URL.Path = rest
+			entryFs := EntryFileSystem{cas: m.cas, entry: entry}
 			entryFs.ServeHTTP(w, r)
+			return
 		}
 	}
 	http.Error(w, "Yo dawg", http.StatusNotFound)
@@ -110,7 +108,7 @@ func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
 	go func() {
 		// TODO(maruel): Will blow up if mutated concurrently.
 		for k, v := range m.entries {
-			c <- NodeEntry{Path: k, Node: &v, Entry: nil}
+			c <- NodeEntry{RelPath: k, Node: &v}
 		}
 		close(c)
 	}()
@@ -130,33 +128,43 @@ func TestNodesTable(t *testing.T) {
 	load := func() (NodesTable, error) {
 		return loadNodesTable(tempData, cas, log)
 	}
-	testNodesTableImpl(t, load)
+	testNodesTableImpl(t, cas, load)
 }
 
 func TestNodesTableMock(t *testing.T) {
 	t.Parallel()
 	log := getLog(false)
 	cas := &mockCasTable{make(map[string][]byte), false, t, log}
+	// The object needs to be stateful so it doesn't lose its data.
 	nodes := &mockNodesTable{make(map[string]Node), cas, t, log}
 	load := func() (NodesTable, error) {
 		return nodes, nil
 	}
-	testNodesTableImpl(t, load)
+	testNodesTableImpl(t, cas, load)
 }
 
-func request(t *testing.T, nodes NodesTable, path string, expectedCode int) {
+func request(t *testing.T, nodes NodesTable, path string, expectedCode int, expectedBody string) {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBufferString("GET " + path + " HTTP/1.1\r\nHost: test\r\n\r\n")))
 	if err != nil {
 		t.Fatalf("%s: %s", path, err)
 	}
 	resp := httptest.NewRecorder()
 	nodes.ServeHTTP(resp, req)
+	bytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(bytes)
 	if resp.Code != expectedCode {
+		t.Errorf(body)
 		t.Fatalf("%s: %d != %d", path, expectedCode, resp.Code)
+	}
+	if expectedBody != "" && body != expectedBody {
+		t.Fatalf("%s: %#s != %#s", path, expectedBody, body)
 	}
 }
 
-func testNodesTableImpl(t *testing.T, load func() (NodesTable, error)) {
+func testNodesTableImpl(t *testing.T, cas CasTable, load func() (NodesTable, error)) {
 	nodes, err := load()
 	if err != nil {
 		t.Fatal(err)
@@ -166,23 +174,63 @@ func testNodesTableImpl(t *testing.T, load func() (NodesTable, error)) {
 		t.Fatal("Found unexpected value")
 	}
 
-	//cas.Add()
+	// Archive fictious data.
+	file1, err := AddBytes(cas, []byte("content1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	file2, err := AddBytes(cas, []byte("content2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := &Entry{
+		Files: map[string]*Entry{
+			"file1": &Entry{
+				Sha1: file1,
+				Size: 8,
+			},
+			"dir1": &Entry{
+				Files: map[string]*Entry{
+					"dir2": &Entry{
+						Files: map[string]*Entry{
+							"file2": &Entry{
+								Sha1: file2,
+								Size: 8,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	data, err := json.Marshal(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entrySha1, err := AddBytes(cas, data)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	if err := nodes.AddEntry(&Node{"entry sha1", "comment"}, "name"); err != nil {
+	if err := nodes.AddEntry(&Node{entrySha1, "useful comment"}, "fictious"); err != nil {
 		t.Fatal(err)
 	}
 	count := 0
-	//name := ""
-	for _ = range nodes.Enumerate() {
+	name := ""
+	for v := range nodes.Enumerate() {
 		count += 1
-		//name = v.Path
+		name = v.RelPath
 	}
 	if count != 2 {
 		t.Fatalf("Found %d items", count)
 	}
 
-	request(t, nodes, "/", 200)
-	request(t, nodes, "/foo", 404)
-	//request(t, nodes, "/"+name, 301)
-	//request(t, nodes, "/"+name + "/", 200)
+	request(t, nodes, "/", 200, "")
+	request(t, nodes, "/foo", 404, "")
+	request(t, nodes, "/"+name, 301, "")
+	request(t, nodes, "/"+name+"/", 200, "")
+	request(t, nodes, "/"+name+"/file1", 200, "content1")
+	request(t, nodes, "/"+name+"/dir1/dir2/file2", 200, "content2")
+	request(t, nodes, "/"+name+"/dir1/dir2/file3", 404, "")
+	request(t, nodes, "/"+name+"/dir1/dir2", 301, "")
 }

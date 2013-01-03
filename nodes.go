@@ -38,10 +38,9 @@ type Node struct {
 }
 
 type NodeEntry struct {
-	Path  string
-	Node  *Node
-	Entry *Entry
-	Error error
+	RelPath string
+	Node    *Node
+	Error   error
 }
 
 type NodesTable interface {
@@ -172,7 +171,7 @@ func (n *nodesTable) Enumerate() <-chan NodeEntry {
 				if v.FileInfo.IsDir() {
 					continue
 				}
-				relPath := v.FullPath
+				relPath := v.FullPath[len(n.nodesDir)+1:]
 				if path.Base(relPath) == TrashName {
 					// TODO(maruel): Cancel iterating inside the directory!
 					continue
@@ -184,25 +183,27 @@ func (n *nodesTable) Enumerate() <-chan NodeEntry {
 					items <- NodeEntry{Error: fmt.Errorf("Failed reading %s", relPath)}
 					continue
 				}
-				f, err := n.cas.Open(node.Entry)
-				if err != nil {
-					n.cas.NeedFsck()
-					items <- NodeEntry{Error: fmt.Errorf("Invalid entry name: %s", node.Entry)}
-					continue
-				}
-				defer f.Close()
-				entry := &Entry{}
-				if err := loadReaderAsJson(f, entry); err != nil {
-					n.cas.NeedFsck()
-					items <- NodeEntry{Error: fmt.Errorf("Failed reading entry %s", node.Entry)}
-					continue
-				}
-				items <- NodeEntry{Path: relPath, Node: node, Entry: entry}
+				items <- NodeEntry{RelPath: relPath, Node: node}
 			}
 		}
 		close(items)
 	}()
 	return items
+}
+
+func LoadEntry(cas CasTable, hash string) (*Entry, error) {
+	f, err := cas.Open(hash)
+	if err != nil {
+		cas.NeedFsck()
+		return nil, fmt.Errorf("Invalid entry name: %s", hash)
+	}
+	defer f.Close()
+	entry := &Entry{}
+	if err := loadReaderAsJson(f, entry); err != nil {
+		cas.NeedFsck()
+		return nil, fmt.Errorf("Failed reading entry %s", hash)
+	}
+	return entry, nil
 }
 
 // Sadly, http.dirList is not exported. Also it doesn't sort the list by

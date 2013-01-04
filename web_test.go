@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -107,48 +108,47 @@ func TestSmoke(t *testing.T) {
 	// Create a tree of stuff.
 	f.DumbcasAppMock.MakeCasTable("")
 	f.DumbcasAppMock.LoadNodesTable("", f.cas)
-	// sha1
-	_, _, _ = archiveData(t, f.cas, f.nodes)
+	sha1, nodeName, _ := archiveData(t, f.cas, f.nodes)
 
 	f.log.Print("T: Serve over web and verify files are accessible.")
 	f.goWeb()
-	f.log.Print("T: Make sure it gets a redirect.")
+	f.log.Print("T: Make sure it gets a redirect.", sha1, nodeName)
 	r := f.get("/content/retrieve/nodes", "/content/retrieve/nodes/")
 	month := time.Now().UTC().Format("2006-01")
 	expected := fmt.Sprintf("<html><body><pre><a href=\"%s/\">%s/</a>\n<a href=\"tags/\">tags/</a>\n</pre></body></html>", month, month)
 	expectedBody(t, r, expected)
+	f.log.Print("T: Get the directory.")
+	r = f.get("/content/retrieve/nodes/"+month, "/content/retrieve/nodes/"+month+"/")
+	actual := readBody(t, r)
+	re := regexp.MustCompile("\\\"(.*)\\\"")
+	nodeItems := re.FindStringSubmatch(actual)
+	if len(nodeItems) != 2 {
+		t.Fatal(actual)
+	}
+	f.log.Print("T: Get the node.")
+	if month+"/"+nodeItems[1] != nodeName {
+		t.Fatal("Unexpected grep")
+	}
+	r = f.get("/content/retrieve/nodes/"+nodeName, "/content/retrieve/nodes/"+nodeName+"/")
+	expected = "<html><body><pre><a href=\"dir1/\">dir1/</a>\n<a href=\"file1\">file1</a>\n</pre></body></html>"
+	expectedBody(t, r, expected)
+
+	r = f.get("/content/retrieve/default/"+sha1, "/content/retrieve/default/"+sha1)
+	expectedBody(t, r, "content1")
+	r = f.get("/content/retrieve/nodes/"+nodeName+"/file1", "")
+	expectedBody(t, r, "content1")
+	r = f.get("/content/retrieve/nodes/"+nodeName+"/dir1/dir2/file2", "")
+	expectedBody(t, r, "content2")
+
+	f.closeWeb()
 	/*
-		f.log.Print("T: Get the directory.")
-		r = f.get("/content/retrieve/nodes/"+month, "/content/retrieve/nodes/"+month+"/")
-		actual := readBody(t, r)
-		re := regexp.MustCompile("\\\"(.*)\\\"")
-		nodeItems := re.FindStringSubmatch(actual)
-		if len(nodeItems) != 2 {
-			t.Fatal(actual)
-		}
-
-		f.log.Print("T: Get the node.")
-		nodeName := nodeItems[1]
-		r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName, "/content/retrieve/nodes/"+month+"/"+nodeName+"/")
-		expected = "<html><body><pre><a href=\"tmp/\">tmp/</a>\n</pre></body></html>"
-		expectedBody(t, r, expected)
-
-		r = f.get("/content/retrieve/default/"+sha1, "/content/retrieve/default/"+sha1)
-		expectedBody(t, r, "content1")
-		r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName+"/file1", "")
-		expectedBody(t, r, "content1")
-		r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName+"/dir1/dir2/file2", "")
-		expectedBody(t, r, "content2")
-
-		f.closeWeb()
 		f.log.Print("T: Remove dir1/dir2/dir3/foo, archive again and gc.")
 		// ...
-
 		f.log.Print("T: Lookup dir1/dir2/dir3/foo is still present in the backup")
 		f.goWeb()
-		r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName+f.tempData+"/dir1/dir2/dir3/foo", "")
+		r = f.get("/content/retrieve/nodes/"+nodeName+"/dir1/dir2/dir3/foo", "")
 		expectedBody(t, r, tree["dir1/dir2/dir3/foo"])
-		r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName+f.tempData+"/dir1/bar", "")
+		r = f.get("/content/retrieve/nodes/"+nodeName+"/dir1/bar", "")
 		expectedBody(t, r, tree["dir1/bar"])
 		f.closeWeb()
 
@@ -163,10 +163,9 @@ func TestSmoke(t *testing.T) {
 
 		f.log.Print("T: Corrupt and fsck.")
 		// ...
-
 		// Lookup with web the file is not present anymore.
 		f.goWeb()
-		f.get404("/content/retrieve/nodes/" + month + "/" + nodeName + f.tempData + "/dir1/bar")
+		f.get404("/content/retrieve/nodes/" + nodeName + "/dir1/bar")
 		f.closeWeb()
 	*/
 }

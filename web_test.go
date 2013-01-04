@@ -28,7 +28,7 @@ type WebDumbcasAppMock struct {
 
 func makeWebDumbcasAppMock(t *testing.T, verbose bool) *WebDumbcasAppMock {
 	return &WebDumbcasAppMock{
-		DumbcasAppMock: *makeDumbcasMock(t, verbose),
+		DumbcasAppMock: *makeDumbcasAppMock(t, verbose),
 		closed:         make(chan bool),
 	}
 }
@@ -94,7 +94,7 @@ func expectedBody(t *testing.T, r *http.Response, expected string) {
 	}
 }
 
-func TestSmoke(t *testing.T) {
+func TestWeb(t *testing.T) {
 	t.Parallel()
 	f := makeWebDumbcasAppMock(t, false)
 	cmd := FindCommand(f, "web")

@@ -39,7 +39,7 @@ func (a *DumbcasAppMock) Run(args []string, expected int) {
 	}
 }
 
-func makeDumbcasMock(t *testing.T, verbose bool) *DumbcasAppMock {
+func makeDumbcasAppMock(t *testing.T, verbose bool) *DumbcasAppMock {
 	a := &DumbcasAppMock{
 		ApplicationMock: *makeAppMock(t),
 		log:             getLog(verbose),

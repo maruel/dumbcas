@@ -35,8 +35,8 @@ func TagRecurse(entries map[string]bool, entry *Entry) {
 	}
 }
 
-func gcMain(a DumbcasApplication) error {
-	cas, nodes, err := CommonFlag(a, false, false)
+func gcMain(a DumbcasApplication, c Command) error {
+	cas, nodes, err := CommonFlag(a, c, false, false)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (c *gc) Run(a Application, args []string) int {
 		return 1
 	}
 	d := a.(DumbcasApplication)
-	if err := gcMain(d); err != nil {
+	if err := gcMain(d, c); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

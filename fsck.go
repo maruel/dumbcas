@@ -26,8 +26,8 @@ var cmdFsck = &fsck{
 	},
 }
 
-func fsckMain(a DumbcasApplication) error {
-	cas, _, err := CommonFlag(a, false, true)
+func fsckMain(a DumbcasApplication, c Command) error {
+	cas, _, err := CommonFlag(a, c, false, true)
 	if err != nil {
 		return err
 	}
@@ -67,13 +67,13 @@ func fsckMain(a DumbcasApplication) error {
 	return nil
 }
 
-func (cmd *fsck) Run(a Application, args []string) int {
+func (c *fsck) Run(a Application, args []string) int {
 	if len(args) != 0 {
 		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1
 	}
 	d := a.(DumbcasApplication)
-	if err := fsckMain(d); err != nil {
+	if err := fsckMain(d, c); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

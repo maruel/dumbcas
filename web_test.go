@@ -39,7 +39,7 @@ func (f *WebDumbcasAppMock) goWeb() {
 	}
 	c := make(chan net.Listener)
 	go func() {
-		err := webMain(f, 0, c)
+		err := webMain(f, FindCommand(f, "web"), 0, c)
 		f.log.Printf("Closed: %s", err)
 		f.closed <- true
 	}()

@@ -95,8 +95,8 @@ var cmdWeb = &web{
 	},
 }
 
-func webMain(d DumbcasApplication, port int, ready chan<- net.Listener) error {
-	cas, nodes, err := CommonFlag(d, false, true)
+func webMain(d DumbcasApplication, c Command, port int, ready chan<- net.Listener) error {
+	cas, nodes, err := CommonFlag(d, c, false, true)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func webMain(d DumbcasApplication, port int, ready chan<- net.Listener) error {
 	}
 
 	_, portStr, _ := net.SplitHostPort(ls.Addr().String())
-	d.GetLog().Printf("Serving %s on port %s", Root, portStr)
+	d.GetLog().Printf("Serving %s on port %s", GetFlagValue(c, "root"), portStr)
 
 	if ready != nil {
 		ready <- ls
@@ -140,7 +140,7 @@ func (c *web) Run(a Application, args []string) int {
 		return 1
 	}
 	d := a.(DumbcasApplication)
-	if err := webMain(d, webPort, nil); err != nil {
+	if err := webMain(d, c, webPort, nil); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

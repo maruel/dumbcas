@@ -24,31 +24,34 @@ import (
 )
 
 // Common flags.
-var Root string
-
 func GetCommonFlags() flag.FlagSet {
 	flags := flag.FlagSet{}
-	flags.StringVar(&Root, "root", os.Getenv("DUMBCAS_ROOT"), "Root directory; required. Set $DUMBCAS_ROOT to set a default.")
+	flags.String("root", os.Getenv("DUMBCAS_ROOT"), "Root directory; required. Set $DUMBCAS_ROOT to set a default.")
 	return flags
 }
 
-func CommonFlag(d DumbcasApplication, createRoot bool, bypassFsck bool) (CasTable, NodesTable, error) {
-	if Root == "" {
+func GetFlagValue(c Command, name string) string {
+	return c.GetFlags().Lookup(name).Value.String()
+}
+
+func CommonFlag(d DumbcasApplication, c Command, createRoot bool, bypassFsck bool) (CasTable, NodesTable, error) {
+	root := GetFlagValue(c, "root")
+	if root == "" {
 		return nil, nil, errors.New("Must provide -root")
 	}
-	if root, err := filepath.Abs(Root); err != nil {
-		return nil, nil, fmt.Errorf("Failed to find %s", Root)
+	if root2, err := filepath.Abs(root); err != nil {
+		return nil, nil, fmt.Errorf("Failed to find %s", root)
 	} else {
-		Root = root
+		root = root2
 	}
 
 	if createRoot {
-		if err := os.MkdirAll(Root, 0750); err != nil && !os.IsExist(err) {
-			return nil, nil, fmt.Errorf("Failed to create %s: %s", Root, err)
+		if err := os.MkdirAll(root, 0750); err != nil && !os.IsExist(err) {
+			return nil, nil, fmt.Errorf("Failed to create %s: %s", root, err)
 		}
 	}
 
-	cas, err := d.MakeCasTable(Root)
+	cas, err := d.MakeCasTable(root)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -58,7 +61,7 @@ func CommonFlag(d DumbcasApplication, createRoot bool, bypassFsck bool) (CasTabl
 		}
 		fmt.Fprintf(os.Stderr, "WARNING: fsck is needed.")
 	}
-	nodes, err := d.LoadNodesTable(Root, cas)
+	nodes, err := d.LoadNodesTable(root, cas)
 	if err != nil {
 		return nil, nil, err
 	}

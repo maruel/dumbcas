@@ -250,8 +250,8 @@ func cleanupList(relDir string, inputs []string) {
 	}
 }
 
-func archiveMain(a DumbcasApplication, toArchiveArg string) error {
-	cas, nodes, err := CommonFlag(a, true, true)
+func archiveMain(a DumbcasApplication, c Command, toArchiveArg string) error {
+	cas, nodes, err := CommonFlag(a, c, true, true)
 	if err != nil {
 		return err
 	}
@@ -304,14 +304,14 @@ func init() {
 	cmdArchive.Flag.StringVar(&archiveComment, "comment", "", "Comment to embed in the file")
 }
 
-func (cmd *archive) Run(a Application, args []string) int {
+func (c *archive) Run(a Application, args []string) int {
 	if len(args) != 1 {
 		fmt.Fprintf(a.GetErr(), "%s: Must only provide a .toArchive file.\n", a.GetName())
 		return 1
 	}
 	HandleCtrlC()
 	d := a.(DumbcasApplication)
-	if err := archiveMain(d, args[0]); err != nil {
+	if err := archiveMain(d, c, args[0]); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

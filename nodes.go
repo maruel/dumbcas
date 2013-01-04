@@ -45,7 +45,7 @@ type NodeEntry struct {
 
 type NodesTable interface {
 	http.Handler
-	AddEntry(node *Node, name string) error
+	AddEntry(node *Node, name string) (string, error)
 	// Enumerates all the entries in the table.
 	Enumerate() <-chan NodeEntry
 }
@@ -96,22 +96,23 @@ func loadNodesTable(rootDir string, cas CasTable, log *log.Logger) (NodesTable, 
 	}, nil
 }
 
-func (n *nodesTable) AddEntry(node *Node, name string) error {
+func (n *nodesTable) AddEntry(node *Node, name string) (string, error) {
 	data, err := json.Marshal(node)
 	if err != nil {
-		return fmt.Errorf("Failed to marshall internal state: %s", err)
+		return "", fmt.Errorf("Failed to marshall internal state: %s", err)
 	}
 	now := time.Now().UTC()
 	// Create one directory store per month.
 	monthName := now.Format("2006-01")
 	monthDir := path.Join(n.nodesDir, monthName)
 	if err := os.MkdirAll(monthDir, 0750); err != nil && !os.IsExist(err) {
-		return fmt.Errorf("Failed to create %s: %s\n", monthDir, err)
+		return "", fmt.Errorf("Failed to create %s: %s\n", monthDir, err)
 	}
 	suffix := 0
+	nodeName := ""
 	nodePath := ""
 	for {
-		nodeName := n.hostname + "_" + now.Format("2006-01-02_15-04-05") + "_" + name
+		nodeName = n.hostname + "_" + now.Format("2006-01-02_15-04-05") + "_" + name
 		if suffix != 0 {
 			nodeName += fmt.Sprintf("(%d)", suffix)
 		}
@@ -122,7 +123,7 @@ func (n *nodesTable) AddEntry(node *Node, name string) error {
 			suffix += 1
 		} else {
 			if _, err = f.Write(data); err != nil {
-				return fmt.Errorf("Failed to write %s: %s", f.Name(), err)
+				return "", fmt.Errorf("Failed to write %s: %s", f.Name(), err)
 			}
 			n.log.Printf("Saved node: %s", path.Join(monthName, nodeName))
 			break
@@ -132,19 +133,19 @@ func (n *nodesTable) AddEntry(node *Node, name string) error {
 	// Also update the tag by creating a symlink.
 	tagsDir := path.Join(n.nodesDir, tagsName)
 	if err := os.MkdirAll(tagsDir, 0750); err != nil && !os.IsExist(err) {
-		return fmt.Errorf("Failed to create %s: %s\n", tagsDir, err)
+		return "", fmt.Errorf("Failed to create %s: %s\n", tagsDir, err)
 	}
 	tagPath := path.Join(tagsDir, name)
 	relPath, err := filepath.Rel(tagsDir, nodePath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	// Ignore error.
 	os.Remove(tagPath)
 	if err := os.Symlink(relPath, tagPath); err != nil {
-		return fmt.Errorf("Failed to create tag %s: %s", tagPath, err)
+		return "", fmt.Errorf("Failed to create tag %s: %s", tagPath, err)
 	}
-	return nil
+	return path.Join(monthName, nodeName), nil
 }
 
 // Enumerates all the entries in the table. If a file or directory is found in

@@ -89,19 +89,20 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Yo dawg", http.StatusNotFound)
 }
 
-func (m *mockNodesTable) AddEntry(node *Node, name string) error {
+func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
 	m.log.Printf("mockNodesTable.AddEntry(%s)", name)
 
 	now := time.Now().UTC()
 	monthName := now.Format("2006-01")
 
+	nodePath := ""
 	suffix := 0
 	for {
 		nodeName := now.Format("2006-01-02_15-04-05") + "_" + name
 		if suffix != 0 {
 			nodeName += fmt.Sprintf("(%d)", suffix)
 		}
-		nodePath := monthName + "/" + nodeName
+		nodePath = path.Join(monthName, nodeName)
 		if _, ok := m.entries[nodePath]; !ok {
 			m.entries[nodePath] = *node
 			break
@@ -110,7 +111,7 @@ func (m *mockNodesTable) AddEntry(node *Node, name string) error {
 		suffix += 1
 	}
 	m.entries[tagsName+"/"+name] = *node
-	return nil
+	return nodePath, nil
 }
 
 func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
@@ -211,10 +212,15 @@ func archiveData(t *testing.T, cas CasTable, nodes NodesTable) (string, string, 
 		t.Fatal(err)
 	}
 
-	if err := nodes.AddEntry(&Node{entrySha1, "useful comment"}, "fictious"); err != nil {
+	now := time.Now().UTC()
+	nodeName, err := nodes.AddEntry(&Node{entrySha1, "useful comment"}, "fictious")
+	if err != nil {
 		t.Fatal(err)
 	}
-	return file1, file2, entrySha1
+	if !strings.HasPrefix(nodeName, now.Format("2006-01/")) {
+		t.Fatalf("Invalid node name %s", nodeName)
+	}
+	return file1, nodeName, entrySha1
 }
 
 func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {

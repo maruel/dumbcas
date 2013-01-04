@@ -280,7 +280,8 @@ func archiveMain(a DumbcasApplication, toArchiveArg string) error {
 		return err
 	}
 	node := &Node{Entry: entrySha1, Comment: archiveComment}
-	return nodes.AddEntry(node, path.Base(toArchive))
+	_, err = nodes.AddEntry(node, path.Base(toArchive))
+	return err
 }
 
 type archive struct {

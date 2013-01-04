@@ -54,7 +54,7 @@ func (f *WebDumbcasAppMock) closeWeb() {
 	f.socket = nil
 	f.baseUrl = ""
 	<-f.closed
-	f.checkBuffer(false, false)
+	f.CheckBuffer(false, false)
 }
 
 func (f *WebDumbcasAppMock) get(url string, expectedUrl string) *http.Response {

@@ -10,7 +10,6 @@ limitations under the License. */
 package main
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -19,35 +18,28 @@ import (
 )
 
 type mockCache struct {
+	*TB
 	root     *EntryCache
 	closed   bool
-	t        *testing.T
 	creation []byte
-	log      *log.Logger
 }
 
 func (c *mockCache) Root() *EntryCache {
-	if c.closed == true {
-		c.t.Fatal("Was unexpectedly closed")
-	}
+	c.Assertf(c.closed == false, "Was unexpectedly closed")
 	return c.root
 }
 
 func (c *mockCache) Close() {
-	if c.closed == true {
-		c.t.Fatal("Was unexpectedly closed")
-	}
+	c.Assertf(c.closed == false, "Was unexpectedly closed")
 	c.closed = false
 }
 
 func (a *DumbcasAppMock) LoadCache() (Cache, error) {
 	//return loadCache()
 	if a.cache == nil {
-		a.cache = &mockCache{&EntryCache{}, false, a.T, debug.Stack(), a.log}
+		a.cache = &mockCache{a.TB, &EntryCache{}, false, debug.Stack()}
 	} else {
-		if a.cache.closed {
-			a.Fatalf("Was not closed properly; %s", a.cache.creation)
-		}
+		a.Assertf(a.cache.closed == true, "Was not closed properly; %s", a.cache.creation)
 		a.cache.closed = false
 	}
 	return a.cache, nil
@@ -88,8 +80,8 @@ func TestCacheRedirected(t *testing.T) {
 
 func TestCacheMock(t *testing.T) {
 	t.Parallel()
-	log := getLog(false)
-	mock := &mockCache{&EntryCache{}, false, t, nil, log}
+	tb := MakeTB(t)
+	mock := &mockCache{tb, &EntryCache{}, false, nil}
 	load := func() (Cache, error) {
 		return mock, nil
 	}

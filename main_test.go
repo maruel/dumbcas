@@ -11,38 +11,19 @@ package main
 
 import (
 	"log"
-	"net"
-	"os"
-	"runtime/debug"
 	"testing"
 )
 
 type DumbcasAppMock struct {
-	ApplicationMock
-	log *log.Logger
+	*ApplicationMock
 	// Statefullness
 	cache *mockCache
 	cas   CasTable
 	nodes NodesTable
-	// Optional stuff
-	socket  net.Listener
-	closed  chan bool
-	baseUrl string
 }
 
 func (a *DumbcasAppMock) GetLog() *log.Logger {
 	return a.log
-}
-
-// Prints the stack trace to ease debugging.
-// It's slightly slower than an explicit condition in the test but its more compact.
-func (d *DumbcasAppMock) Assertf(truth bool, fmt string, values ...interface{}) {
-	if !truth {
-		// Print the log back log first.
-		// TODO: os.Stderr.Write(log.Buffer())
-		os.Stderr.Write(debug.Stack())
-		d.Fatalf(fmt, values...)
-	}
 }
 
 func (a *DumbcasAppMock) Run(args []string, expected int) {
@@ -53,9 +34,7 @@ func (a *DumbcasAppMock) Run(args []string, expected int) {
 
 func makeDumbcasAppMock(t *testing.T, verbose bool) *DumbcasAppMock {
 	a := &DumbcasAppMock{
-		ApplicationMock: *makeAppMock(t),
-		log:             getLog(verbose),
-		closed:          make(chan bool),
+		ApplicationMock: MakeAppMock(t, verbose),
 	}
 	return a
 }

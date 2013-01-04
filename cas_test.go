@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"testing"
@@ -23,20 +22,19 @@ import (
 type mockCasTable struct {
 	entries  map[string][]byte
 	needFsck bool
-	t        *testing.T
-	log      *log.Logger
+	t        *TB
 }
 
 func (a *DumbcasAppMock) MakeCasTable(rootDir string) (CasTable, error) {
 	//return makeCasTable(rootDir)
 	if a.cas == nil {
-		a.cas = &mockCasTable{make(map[string][]byte), false, a.T, a.log}
+		a.cas = &mockCasTable{make(map[string][]byte), false, a.TB}
 	}
 	return a.cas, nil
 }
 
 func (m *mockCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	m.log.Printf("mockCasTable.ServeHTTP(%s)", r.URL.Path)
+	m.t.log.Printf("mockCasTable.ServeHTTP(%s)", r.URL.Path)
 	w.Write(m.entries[r.URL.Path[1:]])
 }
 
@@ -48,7 +46,7 @@ func (m *mockCasTable) Enumerate() <-chan CasEntry {
 		keys[i] = k
 		i++
 	}
-	m.log.Printf("mockCasTable.Enumerate() %d", len(keys))
+	m.t.log.Printf("mockCasTable.Enumerate() %d", len(keys))
 	c := make(chan CasEntry)
 	go func() {
 		for _, k := range keys {
@@ -60,7 +58,7 @@ func (m *mockCasTable) Enumerate() <-chan CasEntry {
 }
 
 func (m *mockCasTable) AddEntry(source io.Reader, item string) error {
-	m.log.Printf("mockCasTable.AddEntry(%s)", item)
+	m.t.log.Printf("mockCasTable.AddEntry(%s)", item)
 	if _, ok := m.entries[item]; ok {
 		return os.ErrExist
 	}
@@ -72,7 +70,7 @@ func (m *mockCasTable) AddEntry(source io.Reader, item string) error {
 }
 
 func (m *mockCasTable) Open(item string) (ReadSeekCloser, error) {
-	m.log.Printf("mockCasTable.Open(%s)", item)
+	m.t.log.Printf("mockCasTable.Open(%s)", item)
 	data, ok := m.entries[item]
 	if !ok {
 		return nil, fmt.Errorf("Missing: %s", item)
@@ -81,7 +79,7 @@ func (m *mockCasTable) Open(item string) (ReadSeekCloser, error) {
 }
 
 func (m *mockCasTable) Remove(item string) error {
-	m.log.Printf("mockCasTable.Remove(%s)", item)
+	m.t.log.Printf("mockCasTable.Remove(%s)", item)
 	if _, ok := m.entries[item]; !ok {
 		return os.ErrNotExist
 	}
@@ -90,17 +88,17 @@ func (m *mockCasTable) Remove(item string) error {
 }
 
 func (m *mockCasTable) SetFsckBit() {
-	m.log.Printf("mockCasTable.SetFsckBit()")
+	m.t.log.Printf("mockCasTable.SetFsckBit()")
 	m.needFsck = true
 }
 
 func (m *mockCasTable) GetFsckBit() bool {
-	m.log.Printf("mockCasTable.GetFsckBit() %t", m.needFsck)
+	m.t.log.Printf("mockCasTable.GetFsckBit() %t", m.needFsck)
 	return m.needFsck
 }
 
 func (m *mockCasTable) ClearFsckBit() {
-	m.log.Printf("mockCasTable.ClearFsckBit()")
+	m.t.log.Printf("mockCasTable.ClearFsckBit()")
 	m.needFsck = false
 }
 
@@ -145,95 +143,67 @@ func TestCasTableImpl(t *testing.T) {
 	tempData := makeTempDir(t, "cas")
 	defer removeTempDir(tempData)
 
+	tb := MakeTB(t)
 	cas, err := makeCasTable(tempData)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testCasTableImpl(t, cas)
+	tb.Assertf(err == nil, "Unexpected error: %s", err)
+	testCasTableImpl(tb, cas)
 }
 
 func TestCasTableNode(t *testing.T) {
 	t.Parallel()
-
-	log := getLog(false)
-	cas := &mockCasTable{make(map[string][]byte), false, t, log}
-	testCasTableImpl(t, cas)
+	tb := MakeTB(t)
+	cas := &mockCasTable{make(map[string][]byte), false, tb}
+	testCasTableImpl(tb, cas)
 }
 
-func testCasTableImpl(t *testing.T, cas CasTable) {
+func testCasTableImpl(t *TB, cas CasTable) {
 	for _ = range cas.Enumerate() {
 		t.Fatal("Found unexpected value")
 	}
 
 	file1, err := AddBytes(cas, []byte("content1"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Assertf(err == nil, "Unexpected error: %s", err)
 
 	count := 0
 	for v := range cas.Enumerate() {
-		if v.Item != file1 {
-			t.Fatal("Found unexpected value")
-		}
+		t.Assertf(v.Item == file1, "Found unexpected value: %s != %s", v.Item, file1)
 		count++
 	}
-	if count != 1 {
-		t.Fatalf("Found %d items", count)
-	}
+	t.Assertf(count == 1, "Found %d items", count)
 
 	// Add the same content.
 	file2, err := AddBytes(cas, []byte("content1"))
-	if !os.IsExist(err) {
-		t.Fatal(err)
-	}
-	if file1 != file2 {
-		t.Fatal("Hash mismatch")
-	}
+	t.Assertf(os.IsExist(err), "Unexpected error: %s", err)
+	t.Assertf(file1 == file2, "Hash mismatch %s != %s", file1, file2)
+
 	count = 0
 	for v := range cas.Enumerate() {
-		if v.Item != file1 {
-			t.Fatal("Found unexpected value")
-		}
+		t.Assertf(v.Item == file1, "Found unexpected value: %s != %s", v.Item, file1)
 		count++
 	}
-	if count != 1 {
-		t.Fatalf("Found %d items", count)
-	}
+	t.Assertf(count == 1, "Found %d items", count)
 
 	f, err := cas.Open(file1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Assertf(err == nil, "Unexpected error: %s", err)
+
 	data, err := ioutil.ReadAll(f)
 	f.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "content1" {
-		t.Fatal(string(data))
-	}
+	t.Assertf(err == nil, "Unexpected error: %s", err)
+	t.Assertf(string(data) == "content1", "Unexpected value: %s", data)
+
 	_, err = cas.Open("0")
-	if err == nil {
-		t.Fatal("Unexpected success")
-	}
-	if err := cas.Remove(file1); err != nil {
-		t.Fatal(err)
-	}
-	if err := cas.Remove(file1); err == nil {
-		t.Fatal("Unexpected success")
-	}
+	t.Assertf(err != nil, "Unexpected success")
+
+	err = cas.Remove(file1)
+	t.Assertf(err == nil, "Unexpected error: %s", err)
+
+	err = cas.Remove(file1)
+	t.Assertf(err != nil, "Unexpected success")
 
 	// Test fsck bit.
-	if cas.GetFsckBit() {
-		t.Fatal("Unexpected")
-	}
+	t.Assertf(!cas.GetFsckBit(), "Unexpected fsck bit is set")
 	cas.SetFsckBit()
-	if !cas.GetFsckBit() {
-		t.Fatal("Unexpected")
-	}
+	t.Assertf(cas.GetFsckBit(), "Unexpected fsck bit is unset")
 	cas.ClearFsckBit()
-	if cas.GetFsckBit() {
-		t.Fatal("Unexpected")
-	}
-
+	t.Assertf(!cas.GetFsckBit(), "Unexpected fsck bit is set")
 }

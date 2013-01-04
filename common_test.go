@@ -10,28 +10,13 @@ limitations under the License. */
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"fmt"
-	"log"
 	"math/big"
 	"os"
 	"path"
 	"testing"
 )
-
-// Logging is a global object so it can't be checked for when tests are run in parallel.
-var bufLog bytes.Buffer
-
-var enableOutput = false
-
-func init() {
-	// Reduces output. Comment out to get more logs.
-	if !enableOutput {
-		log.SetOutput(&bufLog)
-	}
-	log.SetFlags(log.Lmicroseconds)
-}
 
 func GetRandRune() rune {
 	chars := "0123456789abcdefghijklmnopqrstuvwxyz"
@@ -89,15 +74,4 @@ func createTree(rootDir string, tree map[string]string) error {
 		f.Close()
 	}
 	return nil
-}
-
-func getLog(verbose bool) *log.Logger {
-	var l *log.Logger
-	if !enableOutput && !verbose {
-		l = log.New(&bytes.Buffer{}, "", log.Lmicroseconds)
-	} else {
-		// Send directly to output for test debugging.
-		l = log.New(os.Stderr, "", log.Lmicroseconds)
-	}
-	return l
 }

@@ -15,7 +15,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -27,20 +26,19 @@ import (
 type mockNodesTable struct {
 	entries map[string]Node
 	cas     CasTable
-	t       *testing.T
-	log     *log.Logger
+	t       *TB
 }
 
 func (a *DumbcasAppMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
 	//return loadNodesTable(rootDir, cas, a.GetLog())
 	if a.nodes == nil {
-		a.nodes = &mockNodesTable{make(map[string]Node), a.cas, a.T, a.log}
+		a.nodes = &mockNodesTable{make(map[string]Node), a.cas, a.TB}
 	}
 	return a.nodes, nil
 }
 
 func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	m.log.Printf("mockNodesTable.ServeHTTP(%s)", r.URL.Path)
+	m.t.log.Printf("mockNodesTable.ServeHTTP(%s)", r.URL.Path)
 	suburl := r.URL.Path[1:]
 	if suburl != "" {
 		// Slow search, it's fine for a mock.
@@ -94,7 +92,7 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
-	m.log.Printf("mockNodesTable.AddEntry(%s)", name)
+	m.t.log.Printf("mockNodesTable.AddEntry(%s)", name)
 
 	now := time.Now().UTC()
 	monthName := now.Format("2006-01")
@@ -119,7 +117,7 @@ func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
 }
 
 func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
-	m.log.Printf("mockNodesTable.Enumerate() %d", len(m.entries))
+	m.t.log.Printf("mockNodesTable.Enumerate() %d", len(m.entries))
 	c := make(chan NodeEntry)
 	go func() {
 		// TODO(maruel): Will blow up if mutated concurrently.
@@ -136,24 +134,23 @@ func TestNodesTable(t *testing.T) {
 	tempData := makeTempDir(t, "nodes")
 	defer removeTempDir(tempData)
 
-	log := getLog(false)
-	cas := &mockCasTable{make(map[string][]byte), false, t, log}
-	nodes, err := loadNodesTable(tempData, cas, log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	testNodesTableImpl(t, cas, nodes)
+	tb := MakeTB(t)
+	cas := &mockCasTable{make(map[string][]byte), false, tb}
+	nodes, err := loadNodesTable(tempData, cas, tb.log)
+	tb.Assertf(err == nil, "Unexpected error: %s", err)
+
+	testNodesTableImpl(tb, cas, nodes)
 }
 
 func TestNodesTableMock(t *testing.T) {
 	t.Parallel()
-	log := getLog(false)
-	cas := &mockCasTable{make(map[string][]byte), false, t, log}
-	nodes := &mockNodesTable{make(map[string]Node), cas, t, log}
-	testNodesTableImpl(t, cas, nodes)
+	tb := MakeTB(t)
+	cas := &mockCasTable{make(map[string][]byte), false, tb}
+	nodes := &mockNodesTable{make(map[string]Node), cas, tb}
+	testNodesTableImpl(tb, cas, nodes)
 }
 
-func request(t *testing.T, nodes NodesTable, path string, expectedCode int, expectedBody string) string {
+func request(t *TB, nodes NodesTable, path string, expectedCode int, expectedBody string) string {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBufferString("GET " + path + " HTTP/1.1\r\nHost: test\r\n\r\n")))
 	if err != nil {
 		t.Fatalf("%s: %s", path, err)
@@ -230,7 +227,7 @@ func archiveData(t *testing.T, cas CasTable, nodes NodesTable, tree map[string]s
 	return sha1tree, nodeName, entrySha1
 }
 
-func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {
+func testNodesTableImpl(t *TB, cas CasTable, nodes NodesTable) {
 	for _ = range nodes.Enumerate() {
 		t.Fatal("Found unexpected value")
 	}
@@ -239,7 +236,7 @@ func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {
 		"file1":           "content1",
 		"dir1/dir2/file2": "content2",
 	}
-	archiveData(t, cas, nodes, tree1)
+	archiveData(t.T, cas, nodes, tree1)
 	count := 0
 	name := ""
 	for v := range nodes.Enumerate() {

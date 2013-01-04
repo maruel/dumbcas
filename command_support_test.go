@@ -12,15 +12,91 @@ package main
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"io"
+	"log"
+	"os"
+	"runtime/debug"
+	"strings"
 	"testing"
 )
 
-type ApplicationMock struct {
-	DefaultApplication
+// Logging is a global object so it can't be checked for when tests are run in parallel.
+var bufLog bytes.Buffer
+
+var enableOutput = false
+
+func init() {
+	// Reduces output. Comment out to get more logs.
+	if !enableOutput {
+		log.SetOutput(&bufLog)
+	}
+	log.SetFlags(log.Lmicroseconds)
+}
+
+type TB struct {
 	*testing.T
+	bufLog bytes.Buffer
 	bufOut bytes.Buffer
 	bufErr bytes.Buffer
+	log    *log.Logger
+}
+
+func MakeTB(t *testing.T) *TB {
+	tb := &TB{T: t}
+	tb.log = log.New(&tb.bufLog, "", log.Lmicroseconds)
+	if enableOutput {
+		tb.Verbose()
+	}
+	return tb
+}
+
+func PrintIf(b []byte, name string) {
+	s := strings.TrimSpace(string(b))
+	if len(s) != 0 {
+		fmt.Fprintf(os.Stderr, "\n\\/ \\/ %s \\/ \\/\n%s\n/\\ /\\ %s /\\ /\\\n", name, s, name)
+	}
+}
+
+// Prints the stack trace to ease debugging.
+// It's slightly slower than an explicit condition in the test but its more compact.
+func (t *TB) Assertf(truth bool, fmt string, values ...interface{}) {
+	if !truth {
+		PrintIf(t.bufOut.Bytes(), "STDOUT")
+		PrintIf(t.bufErr.Bytes(), "STDERR")
+		PrintIf(t.bufLog.Bytes(), "LOG")
+		PrintIf(debug.Stack(), "STACK")
+		t.Fatalf(fmt, values...)
+	}
+}
+
+func (t *TB) CheckBuffer(out, err bool) {
+	if out {
+		// Print Stderr to see what happened.
+		t.Assertf(t.bufOut.Len() != 0, "Expected stdout")
+	} else {
+		t.Assertf(t.bufOut.Len() == 0, "Unexpected stdout")
+	}
+
+	if err {
+		t.Assertf(t.bufErr.Len() != 0, "Expected stderr")
+	} else {
+		t.Assertf(t.bufErr.Len() == 0, "Unexpected stderr")
+	}
+	t.bufOut.Reset()
+	t.bufErr.Reset()
+}
+
+func (tb *TB) Verbose() {
+	if tb.bufLog.Len() != 0 {
+		os.Stderr.Write(tb.bufLog.Bytes())
+	}
+	tb.log = log.New(os.Stderr, "", log.Lmicroseconds)
+}
+
+type ApplicationMock struct {
+	DefaultApplication
+	*TB
 }
 
 func (a *ApplicationMock) GetOut() io.Writer {
@@ -29,31 +105,6 @@ func (a *ApplicationMock) GetOut() io.Writer {
 
 func (a *ApplicationMock) GetErr() io.Writer {
 	return &a.bufErr
-}
-
-func (a *ApplicationMock) checkBuffer(out, err bool) {
-	if out {
-		if a.bufOut.Len() == 0 {
-			// Print Stderr to see what happened.
-			a.Fatalf("Expected buffer:\n%s", a.bufErr.String())
-		}
-	} else {
-		if a.bufOut.Len() != 0 {
-			a.Fatalf("Unexpected buffer:\n%s", a.bufOut.String())
-		}
-	}
-
-	if err {
-		if a.bufErr.Len() == 0 {
-			a.Fatalf("Expected buffer:\n%s", a.bufOut.String())
-		}
-	} else {
-		if a.bufErr.Len() != 0 {
-			a.Fatalf("Unexpected buffer:\n%s", a.bufErr.String())
-		}
-	}
-	a.bufOut.Reset()
-	a.bufErr.Reset()
 }
 
 type CommandMock struct {
@@ -65,11 +116,8 @@ func (c *CommandMock) GetFlags() *flag.FlagSet {
 	return &c.flags
 }
 
-func makeAppMock(t *testing.T) *ApplicationMock {
-	a := &ApplicationMock{
-		DefaultApplication: application,
-		testing.T:          t,
-	}
+func MakeAppMock(t *testing.T, verbose bool) *ApplicationMock {
+	a := &ApplicationMock{application, MakeTB(t)}
 	for i, c := range a.Commands {
 		a.Commands[i] = &CommandMock{c, *c.GetFlags()}
 	}
@@ -78,41 +126,41 @@ func makeAppMock(t *testing.T) *ApplicationMock {
 
 func TestHelp(t *testing.T) {
 	t.Parallel()
-	a := makeAppMock(t)
+	a := MakeAppMock(t, false)
 	args := []string{"help"}
 	if returncode := Run(a, args); returncode != 0 {
 		a.Fatal("Unexpected return code", returncode)
 	}
-	a.checkBuffer(true, false)
+	a.CheckBuffer(true, false)
 }
 
 func TestHelpBadFlag(t *testing.T) {
 	t.Parallel()
-	a := makeAppMock(t)
+	a := MakeAppMock(t, false)
 	args := []string{"help", "-foo"}
 	// TODO(maruel): This is inconsistent.
 	if returncode := Run(a, args); returncode != 0 {
 		a.Fatal("Unexpected return code", returncode)
 	}
-	a.checkBuffer(false, true)
+	a.CheckBuffer(false, true)
 }
 
 func TestHelpBadCommand(t *testing.T) {
 	t.Parallel()
-	a := makeAppMock(t)
+	a := MakeAppMock(t, false)
 	args := []string{"help", "non_existing_command"}
 	if returncode := Run(a, args); returncode != 2 {
 		a.Fatal("Unexpected return code", returncode)
 	}
-	a.checkBuffer(false, true)
+	a.CheckBuffer(false, true)
 }
 
 func TestBadCommand(t *testing.T) {
 	t.Parallel()
-	a := makeAppMock(t)
+	a := MakeAppMock(t, false)
 	args := []string{"non_existing_command"}
 	if returncode := Run(a, args); returncode != 2 {
 		a.Fatal("Unexpected return code", returncode)
 	}
-	a.checkBuffer(false, true)
+	a.CheckBuffer(false, true)
 }

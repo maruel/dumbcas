@@ -12,6 +12,8 @@ package main
 import (
 	"log"
 	"net"
+	"os"
+	"runtime/debug"
 	"testing"
 )
 
@@ -32,11 +34,21 @@ func (a *DumbcasAppMock) GetLog() *log.Logger {
 	return a.log
 }
 
+// Prints the stack trace to ease debugging.
+// It's slightly slower than an explicit condition in the test but its more compact.
+func (d *DumbcasAppMock) Assertf(truth bool, fmt string, values ...interface{}) {
+	if !truth {
+		// Print the log back log first.
+		// TODO: os.Stderr.Write(log.Buffer())
+		os.Stderr.Write(debug.Stack())
+		d.Fatalf(fmt, values...)
+	}
+}
+
 func (a *DumbcasAppMock) Run(args []string, expected int) {
 	a.GetLog().Printf("%s", args)
-	if returncode := Run(a, args); returncode != expected {
-		a.Fatal("Unexpected return code", returncode)
-	}
+	returncode := Run(a, args)
+	a.Assertf(returncode == expected, "Unexpected return code %d", returncode)
 }
 
 func makeDumbcasAppMock(t *testing.T, verbose bool) *DumbcasAppMock {
@@ -47,129 +59,3 @@ func makeDumbcasAppMock(t *testing.T, verbose bool) *DumbcasAppMock {
 	}
 	return a
 }
-
-func sha1Map(in map[string]string) map[string]string {
-	out := map[string]string{}
-	for k, v := range in {
-		out[k] = sha1String(v)
-	}
-	return out
-}
-
-/*
-func runarchive(f *DumbcasAppMock) {
-	args := []string{"archive", "-root=" + f.tempArchive, path.Join(f.tempData, "toArchive")}
-	f.Run(args, 0)
-	f.checkBuffer(true, false)
-}
-
-func TestSmoke(t *testing.T) {
-	// End-to-end smoke test that tests archive, web, gc and fsck.
-	t.Parallel()
-	f:=makeDumbcasMock(t, false)
-	f.makeDirs()
-	defer f.cleanup()
-
-	// Create a tree of stuff.
-	tree := map[string]string{
-		"toArchive":          "x\ndir1\n",
-		"x":                  "x\n",
-		"dir1/bar":           "bar\n",
-		"dir1/dir2/dir3/foo": "foo\n",
-	}
-	if err := createTree(f.tempData, tree); err != nil {
-		f.Fatal(err)
-	}
-
-	log.Print("T: Archive.")
-	runarchive(f)
-	log.Print("T: Serve over web and verify files are accessible.")
-	f.goWeb()
-	// Make sure it gets a redirect.
-	r := f.get("/content/retrieve/nodes", "/content/retrieve/nodes/")
-	month := time.Now().UTC().Format("2006-01")
-	expected := fmt.Sprintf("<html><body><pre><a href=\"%s/\">%s/</a>\n<a href=\"tags/\">tags/</a>\n</pre></body></html>", month, month)
-	expectedBody(t, r, expected)
-	r = f.get("/content/retrieve/nodes/"+month, "/content/retrieve/nodes/"+month+"/")
-	actual := readBody(t, r)
-	re := regexp.MustCompile("\\\"(.*)\\\"")
-	nodeItems := re.FindStringSubmatch(actual)
-	if len(nodeItems) != 2 {
-		t.Fatal(actual)
-	}
-	nodeName := nodeItems[1]
-	r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName, "/content/retrieve/nodes/"+month+"/"+nodeName+"/")
-	expected = "<html><body><pre><a href=\"tmp/\">tmp/</a>\n</pre></body></html>"
-	expectedBody(t, r, expected)
-
-	sha1 := sha1String(tree["dir1/dir2/dir3/foo"])
-	r = f.get("/content/retrieve/default/"+sha1, "/content/retrieve/default/"+sha1)
-	expectedBody(t, r, tree["dir1/dir2/dir3/foo"])
-	r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName+f.tempData+"/dir1/dir2/dir3/foo", "")
-	expectedBody(t, r, tree["dir1/dir2/dir3/foo"])
-	r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName+f.tempData+"/dir1/bar", "")
-	expectedBody(t, r, tree["dir1/bar"])
-
-	f.closeWeb()
-
-	log.Print("T: Remove dir1/dir2/dir3/foo, archive again and gc.")
-	if err := os.Remove(path.Join(f.tempData, "dir1", "dir2", "dir3", "foo")); err != nil {
-		f.Fatal(err)
-	}
-	runarchive(f)
-	args := []string{"gc", "-root=" + f.tempArchive}
-	f.Run(args, 0)
-	f.checkBuffer(false, false)
-	log.Print("T: Lookup dir1/dir2/dir3/foo is still present in the backup")
-	f.goWeb()
-	r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName+f.tempData+"/dir1/dir2/dir3/foo", "")
-	expectedBody(t, r, tree["dir1/dir2/dir3/foo"])
-	r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName+f.tempData+"/dir1/bar", "")
-	expectedBody(t, r, tree["dir1/bar"])
-	f.closeWeb()
-
-	log.Print("T: Remove the node, gc and lookup with web the file is not present anymore.")
-	if err := os.Remove(path.Join(f.tempArchive, "nodes", month, nodeName)); err != nil {
-		f.Fatal(err)
-	}
-	matches, err := readDirNames(path.Join(f.tempArchive, "nodes", month))
-	if err != nil {
-		f.Fatal(err)
-	}
-	if len(matches) != 1 {
-		f.Fatal(matches)
-	}
-	nodeName = matches[0]
-	args = []string{"gc", "-root=" + f.tempArchive}
-	f.Run(args, 0)
-	f.checkBuffer(false, false)
-	f.goWeb()
-	f.get404("/content/retrieve/nodes/" + month + "/" + nodeName + f.tempData + "/dir1/dir2/dir3/foo")
-	r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName+f.tempData+"/dir1/bar", "")
-	expectedBody(t, r, tree["dir1/bar"])
-	f.closeWeb()
-
-	log.Print("T: Corrupt and fsck.")
-	sha1 = sha1String(tree["dir1/bar"])
-	file, err := os.OpenFile(path.Join(f.tempArchive, "cas", sha1[:3], sha1[3:]), os.O_WRONLY, 0)
-	if err != nil {
-		f.Fatal("File is missing", err)
-	}
-	if _, err := io.WriteString(file, "something else"); err != nil {
-		f.Fatal("Write fail", err)
-	}
-	file.Sync()
-	file.Close()
-	args = []string{"fsck", "-root=" + f.tempArchive}
-	f.Run(args, 0)
-	f.checkBuffer(false, false)
-	log.Print("T: Verify dir1/bar was removed.")
-	file, err = os.OpenFile(path.Join(f.tempArchive, "cas", sha1[:3], sha1[3:]), os.O_WRONLY, 0)
-	if err == nil {
-		f.Fatal("File was not moved out")
-	}
-	// Lookup with web the file is not present anymore.
-	f.goWeb()
-	f.get404("/content/retrieve/nodes/" + month + "/" + nodeName + f.tempData + "/dir1/bar")
-	f.closeWeb()
-}*/

@@ -127,7 +127,8 @@ func webMain(d DumbcasApplication, c Command, port int, ready chan<- net.Listene
 	return s.Serve(ls)
 }
 
-// Flags.
+// Flags. Note that this is not concurrent safe, only a concern for testing, so
+// webMain() should be used directly.
 var webPort int
 
 func init() {

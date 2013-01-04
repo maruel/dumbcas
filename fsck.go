@@ -22,8 +22,11 @@ var cmdFsck = &fsck{
 		UsageLine: "fsck",
 		ShortDesc: "moves to trash all objects that are not valid content anymore",
 		LongDesc:  "Recalculate the sha-1 of each dumbcas entry and remove any that are corrupted",
-		Flag:      GetCommonFlags(),
 	},
+}
+
+func (c *fsck) InitFlags() {
+	c.Flag = InitCommonFlags()
 }
 
 func fsckMain(a DumbcasApplication, c Command) error {

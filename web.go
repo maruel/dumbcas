@@ -84,14 +84,14 @@ func localRedirect(w http.ResponseWriter, r *http.Request, newPath string) {
 
 type web struct {
 	DefaultCommand
+	port int
 }
 
 var cmdWeb = &web{
-	DefaultCommand{
+	DefaultCommand: DefaultCommand{
 		UsageLine: "web",
 		ShortDesc: "starts a web service to access the dumbcas",
 		LongDesc:  "Serves each node as a full virtual tree of the archived files.",
-		Flag:      GetCommonFlags(),
 	},
 }
 
@@ -127,12 +127,9 @@ func webMain(d DumbcasApplication, c Command, port int, ready chan<- net.Listene
 	return s.Serve(ls)
 }
 
-// Flags. Note that this is not concurrent safe, only a concern for testing, so
-// webMain() should be used directly.
-var webPort int
-
-func init() {
-	cmdWeb.Flag.IntVar(&webPort, "port", 8010, "port number")
+func (c *web) InitFlags() {
+	c.Flag = InitCommonFlags()
+	c.Flag.IntVar(&c.port, "port", 8010, "port number")
 }
 
 func (c *web) Run(a Application, args []string) int {
@@ -141,7 +138,7 @@ func (c *web) Run(a Application, args []string) int {
 		return 1
 	}
 	d := a.(DumbcasApplication)
-	if err := webMain(d, c, webPort, nil); err != nil {
+	if err := webMain(d, c, c.port, nil); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

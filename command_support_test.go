@@ -11,7 +11,7 @@ package main
 
 import (
 	"bytes"
-	"flag"
+	//"flag"
 	"fmt"
 	"io"
 	"log"
@@ -109,17 +109,18 @@ func (a *ApplicationMock) GetErr() io.Writer {
 
 type CommandMock struct {
 	Command
-	flags flag.FlagSet
+	//flags *flag.FlagSet
 }
 
+/*
 func (c *CommandMock) GetFlags() *flag.FlagSet {
-	return &c.flags
-}
+	return c.flags
+}*/
 
 func MakeAppMock(t *testing.T) *ApplicationMock {
 	a := &ApplicationMock{application, MakeTB(t)}
 	for i, c := range a.Commands {
-		a.Commands[i] = &CommandMock{c, *c.GetFlags()}
+		a.Commands[i] = &CommandMock{c}
 	}
 	return a
 }

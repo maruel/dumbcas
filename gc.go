@@ -22,8 +22,11 @@ var cmdGc = &gc{
 		UsageLine: "gc",
 		ShortDesc: "moves to trash all objects that are not referenced anymore",
 		LongDesc:  "Scans each node and each entry file to determine if each cas entry is referenced or not.",
-		Flag:      GetCommonFlags(),
 	},
+}
+
+func (c *gc) InitFlags() {
+	c.Flag = InitCommonFlags()
 }
 
 func TagRecurse(entries map[string]bool, entry *Entry) {

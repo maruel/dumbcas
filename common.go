@@ -24,10 +24,10 @@ import (
 )
 
 // Common flags.
-func GetCommonFlags() flag.FlagSet {
-	flags := flag.FlagSet{}
-	flags.String("root", os.Getenv("DUMBCAS_ROOT"), "Root directory; required. Set $DUMBCAS_ROOT to set a default.")
-	return flags
+func InitCommonFlags() *flag.FlagSet {
+	f := &flag.FlagSet{}
+	f.String("root", os.Getenv("DUMBCAS_ROOT"), "Root directory; required. Set $DUMBCAS_ROOT to set a default.")
+	return f
 }
 
 func GetFlagValue(c Command, name string) string {

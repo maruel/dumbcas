@@ -39,6 +39,8 @@ type Command interface {
 	GetUsageLine() string
 	GetShortDesc() string
 	GetLongDesc() string
+	// Resets the flag state.
+	InitFlags()
 	GetFlags() *flag.FlagSet
 }
 
@@ -72,7 +74,7 @@ type DefaultCommand struct {
 	UsageLine string
 	ShortDesc string
 	LongDesc  string
-	Flag      flag.FlagSet
+	Flag      *flag.FlagSet
 }
 
 func (c *DefaultCommand) GetUsageLine() string {
@@ -88,7 +90,10 @@ func (c *DefaultCommand) GetLongDesc() string {
 }
 
 func (c *DefaultCommand) GetFlags() *flag.FlagSet {
-	return &c.Flag
+	if c.Flag == nil {
+		panic("")
+	}
+	return c.Flag
 }
 
 // Name returns the command's name: the first word in the usage line.
@@ -131,6 +136,7 @@ func getCommandUsageHandler(out io.Writer, a Application, cmd Command, helpUsed 
 // Initialize commands.
 func initCommands(a Application, out io.Writer, helpUsed *bool) {
 	for _, cmd := range a.GetCommands() {
+		cmd.InitFlags()
 		cmd.GetFlags().Usage = getCommandUsageHandler(out, a, cmd, helpUsed)
 		cmd.GetFlags().SetOutput(out)
 		cmd.GetFlags().Init(cmd.GetName(), flag.ContinueOnError)
@@ -209,6 +215,10 @@ var cmdHelp = &help{
 		ShortDesc: "prints help about a command",
 		LongDesc:  "Prints an overview of every commands or information about a specific command.",
 	},
+}
+
+func (c *help) InitFlags() {
+	c.Flag = &flag.FlagSet{}
 }
 
 func (c *help) Run(a Application, args []string) int {

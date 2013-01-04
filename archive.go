@@ -250,7 +250,7 @@ func cleanupList(relDir string, inputs []string) {
 	}
 }
 
-func archiveMain(a DumbcasApplication, c Command, toArchiveArg string) error {
+func archiveMain(a DumbcasApplication, c Command, comment string, toArchiveArg string) error {
 	cas, nodes, err := CommonFlag(a, c, true, true)
 	if err != nil {
 		return err
@@ -279,29 +279,27 @@ func archiveMain(a DumbcasApplication, c Command, toArchiveArg string) error {
 	if err != nil {
 		return err
 	}
-	node := &Node{Entry: entrySha1, Comment: archiveComment}
+	node := &Node{Entry: entrySha1, Comment: comment}
 	_, err = nodes.AddEntry(node, path.Base(toArchive))
 	return err
 }
 
 type archive struct {
 	DefaultCommand
+	comment string
 }
 
 var cmdArchive = &archive{
-	DefaultCommand{
+	DefaultCommand: DefaultCommand{
 		UsageLine: "archive <.toArchive> -out <out>",
 		ShortDesc: "archive files to a dumbcas archive",
 		LongDesc:  "Archives files listed in <.toArchive> file to a directory in the DumbCas(tm) layout. Files listed may be in relative path or in absolute path and may contain environment variables.",
-		Flag:      GetCommonFlags(),
 	},
 }
 
-// Flags.
-var archiveComment string
-
-func init() {
-	cmdArchive.Flag.StringVar(&archiveComment, "comment", "", "Comment to embed in the file")
+func (c *archive) InitFlags() {
+	c.Flag = InitCommonFlags()
+	c.Flag.StringVar(&c.comment, "comment", "", "Comment to embed in the file")
 }
 
 func (c *archive) Run(a Application, args []string) int {
@@ -311,7 +309,7 @@ func (c *archive) Run(a Application, args []string) int {
 	}
 	HandleCtrlC()
 	d := a.(DumbcasApplication)
-	if err := archiveMain(d, c, args[0]); err != nil {
+	if err := archiveMain(d, c, c.comment, args[0]); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

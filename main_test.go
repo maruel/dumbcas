@@ -32,9 +32,6 @@ func (a *DumbcasAppMock) Run(args []string, expected int) {
 	a.Assertf(returncode == expected, "Unexpected return code %d", returncode)
 }
 
-func makeDumbcasAppMock(t *testing.T, verbose bool) *DumbcasAppMock {
-	a := &DumbcasAppMock{
-		ApplicationMock: MakeAppMock(t, verbose),
-	}
-	return a
+func makeDumbcasAppMock(t *testing.T) *DumbcasAppMock {
+	return &DumbcasAppMock{ApplicationMock: MakeAppMock(t)}
 }

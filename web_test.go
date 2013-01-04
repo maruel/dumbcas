@@ -20,15 +20,15 @@ import (
 )
 
 type WebDumbcasAppMock struct {
-	DumbcasAppMock
+	*DumbcasAppMock
 	socket  net.Listener
 	closed  chan bool
 	baseUrl string
 }
 
-func makeWebDumbcasAppMock(t *testing.T, verbose bool) *WebDumbcasAppMock {
+func makeWebDumbcasAppMock(t *testing.T) *WebDumbcasAppMock {
 	return &WebDumbcasAppMock{
-		DumbcasAppMock: *makeDumbcasAppMock(t, verbose),
+		DumbcasAppMock: makeDumbcasAppMock(t),
 		closed:         make(chan bool),
 	}
 }
@@ -96,7 +96,7 @@ func expectedBody(t *testing.T, r *http.Response, expected string) {
 
 func TestWeb(t *testing.T) {
 	t.Parallel()
-	f := makeWebDumbcasAppMock(t, false)
+	f := makeWebDumbcasAppMock(t)
 	cmd := FindCommand(f, "web")
 	if cmd == nil {
 		t.Fatal("Failed to find 'web'")

@@ -116,7 +116,7 @@ func (c *CommandMock) GetFlags() *flag.FlagSet {
 	return &c.flags
 }
 
-func MakeAppMock(t *testing.T, verbose bool) *ApplicationMock {
+func MakeAppMock(t *testing.T) *ApplicationMock {
 	a := &ApplicationMock{application, MakeTB(t)}
 	for i, c := range a.Commands {
 		a.Commands[i] = &CommandMock{c, *c.GetFlags()}
@@ -126,41 +126,37 @@ func MakeAppMock(t *testing.T, verbose bool) *ApplicationMock {
 
 func TestHelp(t *testing.T) {
 	t.Parallel()
-	a := MakeAppMock(t, false)
+	a := MakeAppMock(t)
 	args := []string{"help"}
-	if returncode := Run(a, args); returncode != 0 {
-		a.Fatal("Unexpected return code", returncode)
-	}
+	r := Run(a, args)
+	a.Assertf(r == 0, "Unexpected return code %d", r)
 	a.CheckBuffer(true, false)
 }
 
 func TestHelpBadFlag(t *testing.T) {
 	t.Parallel()
-	a := MakeAppMock(t, false)
+	a := MakeAppMock(t)
 	args := []string{"help", "-foo"}
 	// TODO(maruel): This is inconsistent.
-	if returncode := Run(a, args); returncode != 0 {
-		a.Fatal("Unexpected return code", returncode)
-	}
+	r := Run(a, args)
+	a.Assertf(r == 0, "Unexpected return code %d", r)
 	a.CheckBuffer(false, true)
 }
 
 func TestHelpBadCommand(t *testing.T) {
 	t.Parallel()
-	a := MakeAppMock(t, false)
+	a := MakeAppMock(t)
 	args := []string{"help", "non_existing_command"}
-	if returncode := Run(a, args); returncode != 2 {
-		a.Fatal("Unexpected return code", returncode)
-	}
+	r := Run(a, args)
+	a.Assertf(r == 2, "Unexpected return code %d", r)
 	a.CheckBuffer(false, true)
 }
 
 func TestBadCommand(t *testing.T) {
 	t.Parallel()
-	a := MakeAppMock(t, false)
+	a := MakeAppMock(t)
 	args := []string{"non_existing_command"}
-	if returncode := Run(a, args); returncode != 2 {
-		a.Fatal("Unexpected return code", returncode)
-	}
+	r := Run(a, args)
+	a.Assertf(r == 2, "Unexpected return code %d", r)
 	a.CheckBuffer(false, true)
 }

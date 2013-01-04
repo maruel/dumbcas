@@ -31,7 +31,7 @@ func EnumerateAsList(t *testing.T, cas CasTable) []string {
 
 func TestGc(t *testing.T) {
 	t.Parallel()
-	f := makeDumbcasAppMock(t, false)
+	f := makeDumbcasAppMock(t)
 
 	args := []string{"gc", "-root=\\"}
 	f.Run(args, 0)

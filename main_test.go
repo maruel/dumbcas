@@ -10,17 +10,9 @@ limitations under the License. */
 package main
 
 import (
-	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"net"
-	"net/http"
-	"os"
-	"path"
-	"regexp"
 	"testing"
-	"time"
 )
 
 type DumbcasAppMock struct {
@@ -31,11 +23,9 @@ type DumbcasAppMock struct {
 	cas   CasTable
 	nodes NodesTable
 	// Optional stuff
-	tempArchive string
-	tempData    string
-	socket      net.Listener
-	closed      chan bool
-	baseUrl     string
+	socket  net.Listener
+	closed  chan bool
+	baseUrl string
 }
 
 func (a *DumbcasAppMock) GetLog() *log.Logger {
@@ -58,85 +48,6 @@ func makeDumbcasMock(t *testing.T, verbose bool) *DumbcasAppMock {
 	return a
 }
 
-func baseInit(t *testing.T, verbose bool) *DumbcasAppMock {
-	// The test cases in this file are multi-thread safe. Comment out to ease
-	// debugging.
-	t.Parallel()
-	return makeDumbcasMock(t, verbose)
-}
-
-func (f *DumbcasAppMock) makeDirs() {
-	f.tempData = makeTempDir(f.ApplicationMock.T, "data")
-	f.tempArchive = makeTempDir(f.ApplicationMock.T, "out")
-}
-
-func (f *DumbcasAppMock) cleanup() {
-	if f.tempArchive != "" {
-		removeTempDir(f.tempArchive)
-	}
-	if f.tempData != "" {
-		removeTempDir(f.tempData)
-	}
-}
-
-func (f *DumbcasAppMock) goWeb() {
-	if f.socket != nil {
-		f.Fatal("Socket is empty")
-	}
-	c := make(chan net.Listener)
-	go func() {
-		webMain(f, 0, c)
-		f.closed <- true
-	}()
-	f.socket = <-c
-	f.baseUrl = fmt.Sprintf("http://%s", f.socket.Addr().String())
-}
-
-func (f *DumbcasAppMock) closeWeb() {
-	f.socket.Close()
-	f.socket = nil
-	f.baseUrl = ""
-	<-f.closed
-	f.checkBuffer(false, false)
-}
-
-func (f *DumbcasAppMock) get(url string, expectedUrl string) *http.Response {
-	r, err := http.Get(f.baseUrl + url)
-	if err != nil {
-		f.Fatal(err)
-	}
-	if expectedUrl != "" && r.Request.URL.Path != expectedUrl {
-		f.Fatalf("%s != %s", expectedUrl, r.Request.URL.Path)
-	}
-	return r
-}
-
-func (f *DumbcasAppMock) get404(url string) {
-	r, err := http.Get(f.baseUrl + url)
-	if err != nil {
-		f.Fatal(err)
-	}
-	if r.StatusCode != 404 {
-		f.Fatal(r.StatusCode, r.Body)
-	}
-}
-
-func readBody(t *testing.T, r *http.Response) string {
-	bytes, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.Body.Close()
-	return string(bytes)
-}
-
-func expectedBody(t *testing.T, r *http.Response, expected string) {
-	actual := readBody(t, r)
-	if actual != expected {
-		t.Fatalf("%v != %v", expected, actual)
-	}
-}
-
 func sha1Map(in map[string]string) map[string]string {
 	out := map[string]string{}
 	for k, v := range in {
@@ -145,6 +56,7 @@ func sha1Map(in map[string]string) map[string]string {
 	return out
 }
 
+/*
 func runarchive(f *DumbcasAppMock) {
 	args := []string{"archive", "-root=" + f.tempArchive, path.Join(f.tempData, "toArchive")}
 	f.Run(args, 0)
@@ -153,7 +65,8 @@ func runarchive(f *DumbcasAppMock) {
 
 func TestSmoke(t *testing.T) {
 	// End-to-end smoke test that tests archive, web, gc and fsck.
-	f := baseInit(t, false)
+	t.Parallel()
+	f:=makeDumbcasMock(t, false)
 	f.makeDirs()
 	defer f.cleanup()
 
@@ -259,4 +172,4 @@ func TestSmoke(t *testing.T) {
 	f.goWeb()
 	f.get404("/content/retrieve/nodes/" + month + "/" + nodeName + f.tempData + "/dir1/bar")
 	f.closeWeb()
-}
+}*/

@@ -137,6 +137,16 @@ func initCommands(a Application, out io.Writer, helpUsed *bool) {
 	}
 }
 
+// Finds a command by name.
+func FindCommand(a Application, name string) Command {
+	for _, cmd := range a.GetCommands() {
+		if cmd.GetName() == name {
+			return cmd
+		}
+	}
+	return nil
+}
+
 // Runs the application, scheduling the subcommand.
 func Run(a Application, args []string) int {
 	var helpUsed bool
@@ -160,14 +170,12 @@ func Run(a Application, args []string) int {
 		return 2
 	}
 
-	for _, cmd := range a.GetCommands() {
-		if cmd.GetName() == args[0] {
-			cmd.GetFlags().Parse(args[1:])
-			if helpUsed {
-				return 0
-			}
-			return cmd.Run(a, cmd.GetFlags().Args())
+	if cmd := FindCommand(a, args[0]); cmd != nil {
+		cmd.GetFlags().Parse(args[1:])
+		if helpUsed {
+			return 0
 		}
+		return cmd.Run(a, cmd.GetFlags().Args())
 	}
 
 	fmt.Fprintf(a.GetErr(), "%s: unknown command %#q\n\nRun '%s help' for usage.\n", a.GetName(), args[0], a.GetName())
@@ -216,11 +224,9 @@ func (c *help) Run(a Application, args []string) int {
 	var helpUsed bool
 	initCommands(a, a.GetOut(), &helpUsed)
 
-	for _, cmdFound := range a.GetCommands() {
-		if cmdFound.GetName() == args[0] {
-			cmdFound.GetFlags().Usage()
-			return 0
-		}
+	if cmd := FindCommand(a, args[0]); cmd != nil {
+		cmd.GetFlags().Usage()
+		return 0
 	}
 
 	fmt.Fprintf(a.GetErr(), "%s: unknown command %#q\n\nRun '%s help' for usage.\n", a.GetName(), args[0], a.GetName())

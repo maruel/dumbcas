@@ -28,7 +28,7 @@ type mockCasTable struct {
 }
 
 func (a *DumbcasAppMock) MakeCasTable(rootDir string) (CasTable, error) {
-	return makeCasTable(rootDir)
+	//return makeCasTable(rootDir)
 	if a.cas == nil {
 		a.cas = &mockCasTable{make(map[string][]byte), false, a.T, a.log}
 	}

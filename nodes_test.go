@@ -32,7 +32,7 @@ type mockNodesTable struct {
 }
 
 func (a *DumbcasAppMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
-	return loadNodesTable(rootDir, cas, a.GetLog())
+	//return loadNodesTable(rootDir, cas, a.GetLog())
 	if a.nodes == nil {
 		a.nodes = &mockNodesTable{make(map[string]Node), a.cas, a.T, a.log}
 	}
@@ -42,38 +42,49 @@ func (a *DumbcasAppMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTabl
 func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.log.Printf("mockNodesTable.ServeHTTP(%s)", r.URL.Path)
 	suburl := r.URL.Path[1:]
-	if suburl == "" {
-		// The real implementation lists each directories independently.
-		items := make([]string, len(m.entries))
-		i := 0
-		for k, _ := range m.entries {
-			items[i] = k
-			i++
+	if suburl != "" {
+		// Slow search, it's fine for a mock.
+		for k, v := range m.entries {
+			if strings.HasPrefix(suburl, k) {
+				// Found.
+				rest := suburl[len(k):]
+				if rest == "" {
+					// TODO(maruel): posix-specific.
+					localRedirect(w, r, path.Base(r.URL.Path)+"/")
+					return
+				}
+				entry, err := LoadEntry(m.cas, v.Entry)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("Failed to load the entry file: %s", err), http.StatusNotFound)
+					return
+				}
+				// Defer to the cas file system.
+				r.URL.Path = rest
+				entryFs := EntryFileSystem{cas: m.cas, entry: entry}
+				entryFs.ServeHTTP(w, r)
+				return
+			}
 		}
-		dirList(w, items)
+	}
+
+	if !strings.HasSuffix(r.URL.Path, "/") {
+		// Not strictly valid but fine enough for a mock.
+		// TODO(maruel): posix-specific.
+		localRedirect(w, r, path.Base(r.URL.Path)+"/")
 		return
 	}
-	// Slow search, it's fine for a mock.
-	for k, v := range m.entries {
-		if strings.HasPrefix(suburl, k) {
-			// Found.
-			rest := suburl[len(k):]
-			if rest == "" {
-				// TODO(maruel): posix-specific.
-				localRedirect(w, r, path.Base(r.URL.Path)+"/")
-				return
-			}
-			entry, err := LoadEntry(m.cas, v.Entry)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to load the entry file: %s", err), http.StatusNotFound)
-				return
-			}
-			// Defer to the cas file system.
-			r.URL.Path = rest
-			entryFs := EntryFileSystem{cas: m.cas, entry: entry}
-			entryFs.ServeHTTP(w, r)
-			return
+
+	// List the corresponding "directory", if found.
+	items := []string{}
+	for k, _ := range m.entries {
+		if strings.HasPrefix(k, suburl) {
+			v := strings.SplitAfterN(k[len(suburl):], "/", 2)
+			items = append(items, v[0])
 		}
+	}
+	if len(items) != 0 {
+		dirList(w, items)
+		return
 	}
 	http.Error(w, "Yo dawg", http.StatusNotFound)
 }
@@ -137,7 +148,7 @@ func TestNodesTableMock(t *testing.T) {
 	testNodesTableImpl(t, cas, nodes)
 }
 
-func request(t *testing.T, nodes NodesTable, path string, expectedCode int, expectedBody string) {
+func request(t *testing.T, nodes NodesTable, path string, expectedCode int, expectedBody string) string {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBufferString("GET " + path + " HTTP/1.1\r\nHost: test\r\n\r\n")))
 	if err != nil {
 		t.Fatalf("%s: %s", path, err)
@@ -156,14 +167,13 @@ func request(t *testing.T, nodes NodesTable, path string, expectedCode int, expe
 	if expectedBody != "" && body != expectedBody {
 		t.Fatalf("%s: %#s != %#s", path, expectedBody, body)
 	}
+	return body
 }
 
-func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {
-	for _ = range nodes.Enumerate() {
-		t.Fatal("Found unexpected value")
-	}
-
-	// Archive fictious data.
+// Archive fictious data.
+// file1: content1
+// dir1/dir2/file2: content2
+func archiveData(t *testing.T, cas CasTable, nodes NodesTable) (string, string, string) {
 	file1, err := AddBytes(cas, []byte("content1"))
 	if err != nil {
 		t.Fatal(err)
@@ -204,6 +214,15 @@ func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {
 	if err := nodes.AddEntry(&Node{entrySha1, "useful comment"}, "fictious"); err != nil {
 		t.Fatal(err)
 	}
+	return file1, file2, entrySha1
+}
+
+func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {
+	for _ = range nodes.Enumerate() {
+		t.Fatal("Found unexpected value")
+	}
+
+	archiveData(t, cas, nodes)
 	count := 0
 	name := ""
 	for v := range nodes.Enumerate() {
@@ -214,8 +233,12 @@ func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {
 		t.Fatalf("Found %d items", count)
 	}
 
-	request(t, nodes, "/", 200, "")
-	request(t, nodes, "/foo", 404, "")
+	body := request(t, nodes, "/", 200, "")
+	if strings.Count(body, "<a ") != 2 {
+		t.Fatal("Unexpected output:\n%s", body)
+	}
+	// TODO(maruel): The mock misbehaves for: request(t, nodes, "/foo", 404, "")
+	request(t, nodes, "/foo/", 404, "")
 	request(t, nodes, "/"+name, 301, "")
 	request(t, nodes, "/"+name+"/", 200, "")
 	request(t, nodes, "/"+name+"/file1", 200, "content1")

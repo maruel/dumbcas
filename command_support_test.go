@@ -16,6 +16,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -58,15 +59,38 @@ func PrintIf(b []byte, name string) {
 	}
 }
 
+// Reduces the amount of data in a stack trace.
+// Trims the first 2 lines and remove the file paths and function pointers to
+// only keep the file names and line numbers.
+func ReduceStackTrace(b []byte) []byte {
+	lines := strings.Split(string(b), "\n")
+	if len(lines) > 2 {
+		lines = lines[2:]
+	}
+	for i := 0; i < len(lines); i++ {
+		if !strings.HasPrefix(lines[i], "\t") {
+			// /path/to/file.go:<lineno> (<addr>)
+			// TODO(maruel): Check on Windows.
+			start := strings.LastIndex(lines[i], string(filepath.Separator))
+			end := strings.LastIndex(lines[i], " ")
+			if start != -1 && end != -1 {
+				lines[i] = lines[i][start+1 : end]
+			}
+		}
+	}
+	return []byte(strings.Join(lines, "\n"))
+}
+
 // Prints the stack trace to ease debugging.
 // It's slightly slower than an explicit condition in the test but its more compact.
-func (t *TB) Assertf(truth bool, fmt string, values ...interface{}) {
+func (t *TB) Assertf(truth bool, format string, values ...interface{}) {
 	if !truth {
 		PrintIf(t.bufOut.Bytes(), "STDOUT")
 		PrintIf(t.bufErr.Bytes(), "STDERR")
 		PrintIf(t.bufLog.Bytes(), "LOG")
-		PrintIf(debug.Stack(), "STACK")
-		t.Fatalf(fmt, values...)
+		os.Stderr.Write([]byte("\n"))
+		os.Stderr.Write(ReduceStackTrace(debug.Stack()))
+		t.Fatalf(format, values...)
 	}
 }
 
@@ -160,4 +184,29 @@ func TestBadCommand(t *testing.T) {
 	r := Run(a, args)
 	a.Assertf(r == 2, "Unexpected return code %d", r)
 	a.CheckBuffer(false, true)
+}
+
+func TestReduceStackTrace(t *testing.T) {
+	t.Parallel()
+	data := "/home/joe/gocode/src/github.com/maruel/dumbcas/command_support_test.go:93 (0x43acb9)\n" +
+		"\tcom/maruel/dumbcas.(*TB).Assertf: os.Stderr.Write(ReduceStackTrace(debug.Stack()))\n" +
+		"/home/joe/gocode/src/github.com/maruel/dumbcas/command_support_test.go:109 (0x43aeaf)\n" +
+		"\tcom/maruel/dumbcas.(*TB).CheckBuffer: t.Assertf(t.bufErr.Len() != 0, \"Unexpected stderr\")\n" +
+		"/home/joe/gocode/src/github.com/maruel/dumbcas/web_test.go:57 (0x440109)\n" +
+		"\tcom/maruel/dumbcas.(*WebDumbcasAppMock).closeWeb: f.CheckBuffer(false, false)\n" +
+		"/home/joe/gocode/src/github.com/maruel/dumbcas/web_test.go:147 (0x441a54)\n" +
+		"\tcom/maruel/dumbcas.TestWeb: f.closeWeb()\n"
+
+	// Much nicer!
+	expected := "command_support_test.go:109\n" +
+		"\tcom/maruel/dumbcas.(*TB).CheckBuffer: t.Assertf(t.bufErr.Len() != 0, \"Unexpected stderr\")\n" +
+		"web_test.go:57\n" +
+		"\tcom/maruel/dumbcas.(*WebDumbcasAppMock).closeWeb: f.CheckBuffer(false, false)\n" +
+		"web_test.go:147\n" +
+		"\tcom/maruel/dumbcas.TestWeb: f.closeWeb()\n"
+
+	actual := string(ReduceStackTrace([]byte(data)))
+	if expected != actual {
+		t.Fatalf("ReduceStackTrace() failed parsing.\nActual:\n%s\n\nExpected:\n%s", expected, actual)
+	}
 }

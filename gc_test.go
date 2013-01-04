@@ -13,6 +13,22 @@ import (
 	"testing"
 )
 
+// Returns a sorted list of all the entries.
+func EnumerateAsList(t *testing.T, cas CasTable) []string {
+	items := []string{}
+	for v := range cas.Enumerate() {
+		if v.Error != nil {
+			t.Fatal("Unexpected failure")
+		}
+		// Hardcoded for sha1.
+		if len(v.Item) != 40 {
+			t.Fatal("Unexpected empty entry")
+		}
+		items = append(items, v.Item)
+	}
+	return items
+}
+
 func TestGc(t *testing.T) {
 	t.Parallel()
 	f := makeDumbcasAppMock(t, false)
@@ -20,11 +36,20 @@ func TestGc(t *testing.T) {
 	args := []string{"gc", "-root=\\"}
 	f.Run(args, 0)
 
+	if items := EnumerateAsList(f.T, f.cas); len(items) != 0 {
+		t.Fatalf("Unexpected items: %s", items)
+	}
 	// Create a tree of stuff.
-	f.MakeCasTable("")
-	f.LoadNodesTable("", f.cas)
-	archiveData(t, f.cas, f.nodes)
+	tree1 := map[string]string{
+		"file1":           "content1",
+		"dir1/dir2/file2": "content2",
+	}
+	archiveData(t, f.cas, f.nodes, tree1)
 
 	args = []string{"gc", "-root=\\"}
 	f.Run(args, 0)
+	if items := EnumerateAsList(f.T, f.cas); len(items) != 3 {
+		t.Fatalf("Unexpected items: %s", items)
+	}
+
 }

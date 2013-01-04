@@ -175,38 +175,40 @@ func request(t *testing.T, nodes NodesTable, path string, expectedCode int, expe
 	return body
 }
 
-// Archive fictious data.
-// file1: content1
-// dir1/dir2/file2: content2
-func archiveData(t *testing.T, cas CasTable, nodes NodesTable) (string, string, string) {
-	file1, err := AddBytes(cas, []byte("content1"))
-	if err != nil {
-		t.Fatal(err)
+// Archives a tree fictious data.
+// Returns (tree of sha1s, name of the node, sha1 of the node entry).
+// Accept the paths as posix.
+func archiveData(t *testing.T, cas CasTable, nodes NodesTable, tree map[string]string) (map[string]string, string, string) {
+	sha1tree := map[string]string{}
+	entries := &Entry{}
+	for k, v := range tree {
+		h, err := AddBytes(cas, []byte(v))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sha1tree[k] = h
+
+		e := entries
+		parts := strings.Split(k, "/")
+		for i := 0; i < len(parts)-1; i++ {
+			if e.Files == nil {
+				e.Files = map[string]*Entry{}
+			}
+			if e.Files[parts[i]] == nil {
+				e.Files[parts[i]] = &Entry{}
+			}
+			e = e.Files[parts[i]]
+		}
+		if e.Files == nil {
+			e.Files = map[string]*Entry{}
+		}
+		e.Files[parts[len(parts)-1]] = &Entry{
+			Sha1: h,
+			Size: int64(len(v)),
+		}
 	}
-	file2, err := AddBytes(cas, []byte("content2"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	entries := &Entry{
-		Files: map[string]*Entry{
-			"file1": &Entry{
-				Sha1: file1,
-				Size: 8,
-			},
-			"dir1": &Entry{
-				Files: map[string]*Entry{
-					"dir2": &Entry{
-						Files: map[string]*Entry{
-							"file2": &Entry{
-								Sha1: file2,
-								Size: 8,
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+
+	// Then process entries itself.
 	data, err := json.Marshal(entries)
 	if err != nil {
 		t.Fatal(err)
@@ -216,6 +218,7 @@ func archiveData(t *testing.T, cas CasTable, nodes NodesTable) (string, string, 
 		t.Fatal(err)
 	}
 
+	// And finally add the node.
 	now := time.Now().UTC()
 	nodeName, err := nodes.AddEntry(&Node{entrySha1, "useful comment"}, "fictious")
 	if err != nil {
@@ -224,7 +227,7 @@ func archiveData(t *testing.T, cas CasTable, nodes NodesTable) (string, string, 
 	if !strings.HasPrefix(nodeName, now.Format("2006-01/")) {
 		t.Fatalf("Invalid node name %s", nodeName)
 	}
-	return file1, nodeName, entrySha1
+	return sha1tree, nodeName, entrySha1
 }
 
 func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {
@@ -232,7 +235,11 @@ func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {
 		t.Fatal("Found unexpected value")
 	}
 
-	archiveData(t, cas, nodes)
+	tree1 := map[string]string{
+		"file1":           "content1",
+		"dir1/dir2/file2": "content2",
+	}
+	archiveData(t, cas, nodes, tree1)
 	count := 0
 	name := ""
 	for v := range nodes.Enumerate() {

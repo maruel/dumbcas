@@ -108,7 +108,11 @@ func TestWeb(t *testing.T) {
 	// Create a tree of stuff.
 	f.DumbcasAppMock.MakeCasTable("")
 	f.DumbcasAppMock.LoadNodesTable("", f.cas)
-	sha1, nodeName, _ := archiveData(t, f.cas, f.nodes)
+	tree1 := map[string]string{
+		"file1":           "content1",
+		"dir1/dir2/file2": "content2",
+	}
+	sha1tree, nodeName, sha1 := archiveData(t, f.cas, f.nodes, tree1)
 
 	f.log.Print("T: Serve over web and verify files are accessible.")
 	f.goWeb()
@@ -133,7 +137,7 @@ func TestWeb(t *testing.T) {
 	expected = "<html><body><pre><a href=\"dir1/\">dir1/</a>\n<a href=\"file1\">file1</a>\n</pre></body></html>"
 	expectedBody(t, r, expected)
 
-	r = f.get("/content/retrieve/default/"+sha1, "/content/retrieve/default/"+sha1)
+	r = f.get("/content/retrieve/default/"+sha1tree["file1"], "/content/retrieve/default/"+sha1tree["file1"])
 	expectedBody(t, r, "content1")
 	r = f.get("/content/retrieve/nodes/"+nodeName+"/file1", "")
 	expectedBody(t, r, "content1")

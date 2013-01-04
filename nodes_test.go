@@ -67,11 +67,9 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !strings.HasSuffix(r.URL.Path, "/") {
-		// Not strictly valid but fine enough for a mock.
-		// TODO(maruel): posix-specific.
-		localRedirect(w, r, path.Base(r.URL.Path)+"/")
-		return
+	needRedirect := !strings.HasSuffix(r.URL.Path, "/")
+	if needRedirect {
+		suburl += "/"
 	}
 
 	// List the corresponding "directory", if found.
@@ -83,6 +81,12 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(items) != 0 {
+		if needRedirect {
+			// Not strictly valid but fine enough for a mock.
+			// TODO(maruel): posix-specific.
+			localRedirect(w, r, path.Base(r.URL.Path)+"/")
+			return
+		}
 		dirList(w, items)
 		return
 	}
@@ -243,7 +247,7 @@ func testNodesTableImpl(t *testing.T, cas CasTable, nodes NodesTable) {
 	if strings.Count(body, "<a ") != 2 {
 		t.Fatal("Unexpected output:\n%s", body)
 	}
-	// TODO(maruel): The mock misbehaves for: request(t, nodes, "/foo", 404, "")
+	request(t, nodes, "/foo", 404, "")
 	request(t, nodes, "/foo/", 404, "")
 	request(t, nodes, "/"+name, 301, "")
 	request(t, nodes, "/"+name+"/", 200, "")

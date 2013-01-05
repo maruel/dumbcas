@@ -14,16 +14,20 @@ import (
 	"testing"
 )
 
-func TestGc(t *testing.T) {
+func TestGcEmpty(t *testing.T) {
 	t.Parallel()
 	f := makeDumbcasAppMock(t)
-
 	args := []string{"gc", "-root=\\foo_bar"}
-	{
-		f.Run(args, 0)
-		i := EnumerateCasAsList(f.TB, f.cas)
-		f.Assertf(len(i) == 0, "Unexpected items: %s", i)
-	}
+	f.Run(args, 0)
+	i := EnumerateCasAsList(f.TB, f.cas)
+	f.Assertf(len(i) == 0, "Unexpected items: %s", i)
+}
+
+func TestGcKept(t *testing.T) {
+	t.Parallel()
+	f := makeDumbcasAppMock(t)
+	args := []string{"gc", "-root=\\foo_bar"}
+	f.Run(args, 0) // Instantiate f.cas and f.nodes
 
 	// Create a tree of stuff.
 	archiveData(f.TB, f.cas, f.nodes, map[string]string{
@@ -31,11 +35,33 @@ func TestGc(t *testing.T) {
 		"dir1/dir2/file2": "content2",
 	})
 
-	f.Run(args, 0)
 	i1 := EnumerateCasAsList(f.TB, f.cas)
 	f.Assertf(len(i1) == 3, "Unexpected items: %d", len(i1))
 	n1 := EnumerateNodesAsList(f.TB, f.nodes)
 	f.Assertf(len(n1) == 2, "Unexpected nodes: %q", n1)
+
+	f.Run(args, 0)
+
+	// Nothing disapeared.
+	i2 := EnumerateCasAsList(f.TB, f.cas)
+	f.Assertf(Equals(i1, i2), "Unexpected items: %d", i2)
+	n2 := EnumerateNodesAsList(f.TB, f.nodes)
+	f.Assertf(Equals(n1, n2), "Unexpected nodes: %q", n2)
+}
+
+func TestGcTrim(t *testing.T) {
+	t.Parallel()
+	f := makeDumbcasAppMock(t)
+	args := []string{"gc", "-root=\\foo_bar"}
+	f.Run(args, 0) // Instantiate f.cas and f.nodes
+
+	// Create a tree of stuff.
+	archiveData(f.TB, f.cas, f.nodes, map[string]string{
+		"file1":           "content1",
+		"dir1/dir2/file2": "content2",
+	})
+	i1 := EnumerateCasAsList(f.TB, f.cas)
+	n1 := EnumerateNodesAsList(f.TB, f.nodes)
 
 	// Add anothera tree of stuff.
 	archiveData(f.TB, f.cas, f.nodes, map[string]string{
@@ -49,9 +75,10 @@ func TestGc(t *testing.T) {
 	f.Assertf(len(i2) == 7, "Unexpected items: %d", len(i2))
 	n2 := EnumerateNodesAsList(f.TB, f.nodes)
 	f.Assertf(len(n2) == 3, "Unexpected items: %q", n2)
+
+	// Remove the first node and gc.
 	err := f.nodes.Remove(n1[0])
 	f.Assertf(err == nil, "Unexpected: %s", err)
-
 	f.Run(args, 0)
 	i3 := EnumerateCasAsList(f.TB, f.cas)
 	f.Assertf(len(i3) == 5, "Unexpected items: %d", len(i3))

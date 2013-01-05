@@ -22,6 +22,23 @@ import (
 	"time"
 )
 
+var cmdArchive = &Command{
+	UsageLine: "archive <.toArchive> -out <out>",
+	ShortDesc: "archive files to a dumbcas archive",
+	LongDesc:  "Archives files listed in <.toArchive> file to a directory in the DumbCas(tm) layout. Files listed may be in relative path or in absolute path and may contain environment variables.",
+	CommandRun: func() CommandRun {
+		c := &archiveRun{}
+		c.Init()
+		c.Flags.StringVar(&c.comment, "comment", "", "Comment to embed in the file")
+		return c
+	},
+}
+
+type archiveRun struct {
+	CommonFlags
+	comment string
+}
+
 // Traverse synchronously both the cache and the entry table.
 func Recurse(cache *EntryCache, entry *Entry, item string) (*EntryCache, *Entry) {
 	cache.LastTested = time.Now().UTC().Unix()
@@ -250,9 +267,8 @@ func cleanupList(relDir string, inputs []string) {
 	}
 }
 
-func archiveMain(a DumbcasApplication, c Command, comment string, toArchiveArg string) error {
-	cas, nodes, err := CommonFlag(a, c, true, true)
-	if err != nil {
+func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
+	if err := c.Parse(a, true, true); err != nil {
 		return err
 	}
 
@@ -275,41 +291,23 @@ func archiveMain(a DumbcasApplication, c Command, comment string, toArchiveArg s
 	}
 
 	// Now the archival part. Create the basic directory structure.
-	entrySha1, err := casArchive(a, entry, cas)
+	entrySha1, err := casArchive(a, entry, c.cas)
 	if err != nil {
 		return err
 	}
-	node := &Node{Entry: entrySha1, Comment: comment}
-	_, err = nodes.AddEntry(node, path.Base(toArchive))
+	node := &Node{Entry: entrySha1, Comment: c.comment}
+	_, err = c.nodes.AddEntry(node, path.Base(toArchive))
 	return err
 }
 
-type archive struct {
-	DefaultCommand
-	comment string
-}
-
-var cmdArchive = &archive{
-	DefaultCommand: DefaultCommand{
-		UsageLine: "archive <.toArchive> -out <out>",
-		ShortDesc: "archive files to a dumbcas archive",
-		LongDesc:  "Archives files listed in <.toArchive> file to a directory in the DumbCas(tm) layout. Files listed may be in relative path or in absolute path and may contain environment variables.",
-	},
-}
-
-func (c *archive) InitFlags() {
-	c.Flag = InitCommonFlags()
-	c.Flag.StringVar(&c.comment, "comment", "", "Comment to embed in the file")
-}
-
-func (c *archive) Run(a Application, args []string) int {
+func (c *archiveRun) Run(a Application, args []string) int {
 	if len(args) != 1 {
 		fmt.Fprintf(a.GetErr(), "%s: Must only provide a .toArchive file.\n", a.GetName())
 		return 1
 	}
 	HandleCtrlC()
 	d := a.(DumbcasApplication)
-	if err := archiveMain(d, c, c.comment, args[0]); err != nil {
+	if err := c.main(d, args[0]); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

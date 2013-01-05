@@ -37,9 +37,12 @@ func (f *WebDumbcasAppMock) goWeb() {
 	if f.socket != nil {
 		f.Fatal("Socket is empty")
 	}
+	cmd := FindCommand(f, "web")
+	r := cmd.CommandRun().(*webRun)
+	r.Root = "\\foo"
 	c := make(chan net.Listener)
 	go func() {
-		err := webMain(f, FindCommand(f, "web"), 0, c)
+		err := r.main(f, c)
 		f.log.Printf("Closed: %s", err)
 		f.closed <- true
 	}()
@@ -101,9 +104,9 @@ func TestWeb(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("Failed to find 'web'")
 	}
-
+	run := cmd.CommandRun().(*webRun)
 	// Sets -root to an invalid non-empty string.
-	cmd.GetFlags().Set("root", "\\")
+	run.Root = "\\foo"
 
 	// Create a tree of stuff.
 	f.DumbcasAppMock.MakeCasTable("")

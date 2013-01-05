@@ -16,6 +16,23 @@ import (
 	"net/http"
 )
 
+var cmdWeb = &Command{
+	UsageLine: "web",
+	ShortDesc: "starts a web service to access the dumbcas",
+	LongDesc:  "Serves each node as a full virtual tree of the archived files.",
+	CommandRun: func() CommandRun {
+		c := &webRun{}
+		c.Init()
+		c.Flags.IntVar(&c.port, "port", 8010, "port number")
+		return c
+	},
+}
+
+type webRun struct {
+	CommonFlags
+	port int
+}
+
 // Converts an handler to log every HTTP request.
 type LoggingHandler struct {
 	handler http.Handler
@@ -82,35 +99,21 @@ func localRedirect(w http.ResponseWriter, r *http.Request, newPath string) {
 	w.WriteHeader(http.StatusMovedPermanently)
 }
 
-type web struct {
-	DefaultCommand
-	port int
-}
-
-var cmdWeb = &web{
-	DefaultCommand: DefaultCommand{
-		UsageLine: "web",
-		ShortDesc: "starts a web service to access the dumbcas",
-		LongDesc:  "Serves each node as a full virtual tree of the archived files.",
-	},
-}
-
-func webMain(d DumbcasApplication, c Command, port int, ready chan<- net.Listener) error {
-	cas, nodes, err := CommonFlag(d, c, false, true)
-	if err != nil {
+func (c *webRun) main(d DumbcasApplication, ready chan<- net.Listener) error {
+	if err := c.Parse(d, false, true); err != nil {
 		return err
 	}
 
 	serveMux := http.NewServeMux()
 
-	x := http.StripPrefix("/content/retrieve/default", cas)
+	x := http.StripPrefix("/content/retrieve/default", c.cas)
 	serveMux.Handle("/content/retrieve/default/", Restrict(x, "GET"))
-	x = http.StripPrefix("/content/retrieve/nodes", nodes)
+	x = http.StripPrefix("/content/retrieve/nodes", c.nodes)
 	serveMux.Handle("/content/retrieve/nodes/", Restrict(x, "GET"))
 	serveMux.Handle("/", Restrict(http.RedirectHandler("/content/retrieve/nodes/", http.StatusFound), "GET"))
 
 	s := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", c.port),
 		Handler: &LoggingHandler{serveMux, d.GetLog()},
 	}
 	ls, e := net.Listen("tcp", s.Addr)
@@ -119,7 +122,7 @@ func webMain(d DumbcasApplication, c Command, port int, ready chan<- net.Listene
 	}
 
 	_, portStr, _ := net.SplitHostPort(ls.Addr().String())
-	d.GetLog().Printf("Serving %s on port %s", GetFlagValue(c, "root"), portStr)
+	d.GetLog().Printf("Serving %s on port %s", c.Root, portStr)
 
 	if ready != nil {
 		ready <- ls
@@ -127,18 +130,13 @@ func webMain(d DumbcasApplication, c Command, port int, ready chan<- net.Listene
 	return s.Serve(ls)
 }
 
-func (c *web) InitFlags() {
-	c.Flag = InitCommonFlags()
-	c.Flag.IntVar(&c.port, "port", 8010, "port number")
-}
-
-func (c *web) Run(a Application, args []string) int {
+func (c *webRun) Run(a Application, args []string) int {
 	if len(args) != 0 {
 		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1
 	}
 	d := a.(DumbcasApplication)
-	if err := webMain(d, c, c.port, nil); err != nil {
+	if err := c.main(d, nil); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

@@ -13,20 +13,19 @@ import (
 	"fmt"
 )
 
-type gc struct {
-	DefaultCommand
-}
-
-var cmdGc = &gc{
-	DefaultCommand{
-		UsageLine: "gc",
-		ShortDesc: "moves to trash all objects that are not referenced anymore",
-		LongDesc:  "Scans each node and each entry file to determine if each cas entry is referenced or not.",
+var cmdGc = &Command{
+	UsageLine: "gc",
+	ShortDesc: "moves to trash all objects that are not referenced anymore",
+	LongDesc:  "Scans each node and each entry file to determine if each cas entry is referenced or not.",
+	CommandRun: func() CommandRun {
+		c := &gcRun{}
+		c.Init()
+		return c
 	},
 }
 
-func (c *gc) InitFlags() {
-	c.Flag = InitCommonFlags()
+type gcRun struct {
+	CommonFlags
 }
 
 func TagRecurse(entries map[string]bool, entry *Entry) {
@@ -38,17 +37,16 @@ func TagRecurse(entries map[string]bool, entry *Entry) {
 	}
 }
 
-func gcMain(a DumbcasApplication, c Command) error {
-	cas, nodes, err := CommonFlag(a, c, false, false)
-	if err != nil {
+func (c *gcRun) main(a DumbcasApplication) error {
+	if err := c.Parse(a, false, false); err != nil {
 		return err
 	}
 
 	entries := map[string]bool{}
-	for item := range cas.Enumerate() {
+	for item := range c.cas.Enumerate() {
 		if item.Error != nil {
 			// TODO(maruel): Leaks channel.
-			cas.SetFsckBit()
+			c.cas.SetFsckBit()
 			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)
 		}
 		entries[item.Item] = false
@@ -56,13 +54,13 @@ func gcMain(a DumbcasApplication, c Command) error {
 	a.GetLog().Printf("Found %d entries", len(entries))
 
 	// Load all the nodes.
-	for item := range nodes.Enumerate() {
+	for item := range c.nodes.Enumerate() {
 		if item.Error != nil {
 			// TODO(maruel): Leaks channel.
 			return item.Error
 		}
 		entries[item.Node.Entry] = true
-		entry, err := LoadEntry(cas, item.Node.Entry)
+		entry, err := LoadEntry(c.cas, item.Node.Entry)
 		if err != nil {
 			return err
 		}
@@ -77,21 +75,21 @@ func gcMain(a DumbcasApplication, c Command) error {
 	}
 	a.GetLog().Printf("Found %d orphan", len(orphans))
 	for _, orphan := range orphans {
-		if err := cas.Remove(orphan); err != nil {
-			cas.SetFsckBit()
+		if err := c.cas.Remove(orphan); err != nil {
+			c.cas.SetFsckBit()
 			return fmt.Errorf("Internal error while removing %s: %s", orphan, err)
 		}
 	}
 	return nil
 }
 
-func (c *gc) Run(a Application, args []string) int {
+func (c *gcRun) Run(a Application, args []string) int {
 	if len(args) != 0 {
 		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1
 	}
 	d := a.(DumbcasApplication)
-	if err := gcMain(d, c); err != nil {
+	if err := c.main(d); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

@@ -25,29 +25,20 @@ import (
 	"text/template"
 )
 
+// Application describes an application with subcommand support.
 type Application interface {
 	GetName() string
 	GetTitle() string
-	GetCommands() []Command
+	GetCommands() []*Command
 	GetOut() io.Writer // Used for testing, should be normally os.Stdout.
 	GetErr() io.Writer // Used for testing, should be normally os.Stderr.
 }
 
-type Command interface {
-	Run(a Application, args []string) int
-	GetName() string
-	GetUsageLine() string
-	GetShortDesc() string
-	GetLongDesc() string
-	// Resets the flag state.
-	InitFlags()
-	GetFlags() *flag.FlagSet
-}
-
+// DefaultApplication implements all of Application interface's methods.
 type DefaultApplication struct {
 	Name     string
 	Title    string
-	Commands []Command
+	Commands []*Command
 }
 
 func (a *DefaultApplication) GetName() string {
@@ -58,7 +49,7 @@ func (a *DefaultApplication) GetTitle() string {
 	return a.Title
 }
 
-func (a *DefaultApplication) GetCommands() []Command {
+func (a *DefaultApplication) GetCommands() []*Command {
 	return a.Commands
 }
 
@@ -70,35 +61,36 @@ func (a *DefaultApplication) GetErr() io.Writer {
 	return os.Stderr
 }
 
-type DefaultCommand struct {
-	UsageLine string
-	ShortDesc string
-	LongDesc  string
-	Flag      *flag.FlagSet
+// CommandRun is an initialized object representing a subcommand that is ready
+// to be executed.
+type CommandRun interface {
+	Run(a Application, args []string) int
+	GetFlags() *flag.FlagSet
 }
 
-func (c *DefaultCommand) GetUsageLine() string {
-	return c.UsageLine
+// Command describes a subcommand. It has one generator to generate a command
+// object which is executable. The purpose of this design is to enable safe
+// parallel execution of test cases.
+type Command struct {
+	UsageLine  string
+	ShortDesc  string
+	LongDesc   string
+	CommandRun func() CommandRun
 }
 
-func (c *DefaultCommand) GetShortDesc() string {
-	return c.ShortDesc
+// CommandRunBase implements GetFlags of CommandRun. It should be embedded in
+// another struct that implements Run().
+type CommandRunBase struct {
+	Flags flag.FlagSet
 }
 
-func (c *DefaultCommand) GetLongDesc() string {
-	return c.LongDesc
-}
-
-func (c *DefaultCommand) GetFlags() *flag.FlagSet {
-	if c.Flag == nil {
-		panic("")
-	}
-	return c.Flag
+func (c *CommandRunBase) GetFlags() *flag.FlagSet {
+	return &c.Flags
 }
 
 // Name returns the command's name: the first word in the usage line.
-func (c *DefaultCommand) GetName() string {
-	name := c.GetUsageLine()
+func (c *Command) Name() string {
+	name := c.UsageLine
 	i := strings.Index(name, " ")
 	if i >= 0 {
 		name = name[:i]
@@ -106,13 +98,14 @@ func (c *DefaultCommand) GetName() string {
 	return name
 }
 
+// usage prints out the general application usage.
 func usage(out io.Writer, a Application) {
 	usageTemplate := `{{.GetTitle}}
 
 Usage:  {{.GetName}} [command] [arguments]
 
 Commands:{{range .Commands}}
-    {{.GetName | printf "%-11s"}} {{.GetShortDesc}}{{end}}
+    {{.Name | printf "%-11s"}} {{.ShortDesc}}{{end}}
 
 Use "{{.GetName}} help [command]" for more information about a command.
 
@@ -120,43 +113,39 @@ Use "{{.GetName}} help [command]" for more information about a command.
 	tmpl(out, usageTemplate, a)
 }
 
-func getCommandUsageHandler(out io.Writer, a Application, cmd Command, helpUsed *bool) func() {
+func getCommandUsageHandler(out io.Writer, a Application, c *Command, r CommandRun, helpUsed *bool) func() {
 	return func() {
-		helpTemplate := "{{.Cmd.GetLongDesc | trim | wrapWithLines}}usage:  {{.App.GetName}} {{.Cmd.GetUsageLine}}\n"
+		helpTemplate := "{{.Cmd.LongDesc | trim | wrapWithLines}}usage:  {{.App.GetName}} {{.Cmd.UsageLine}}\n"
 		dict := struct {
 			App Application
-			Cmd Command
-		}{a, cmd}
+			Cmd *Command
+		}{a, c}
 		tmpl(out, helpTemplate, dict)
-		cmd.GetFlags().PrintDefaults()
+		r.GetFlags().PrintDefaults()
 		*helpUsed = true
 	}
 }
 
-// Initialize commands.
-func initCommands(a Application, out io.Writer, helpUsed *bool) {
-	for _, cmd := range a.GetCommands() {
-		cmd.InitFlags()
-		cmd.GetFlags().Usage = getCommandUsageHandler(out, a, cmd, helpUsed)
-		cmd.GetFlags().SetOutput(out)
-		cmd.GetFlags().Init(cmd.GetName(), flag.ContinueOnError)
-	}
+// Initializes the flags for a specific CommandRun.
+func initCommand(a Application, c *Command, r CommandRun, out io.Writer, helpUsed *bool) {
+	r.GetFlags().Usage = getCommandUsageHandler(out, a, c, r, helpUsed)
+	r.GetFlags().SetOutput(out)
+	r.GetFlags().Init(c.Name(), flag.ContinueOnError)
 }
 
-// Finds a command by name.
-func FindCommand(a Application, name string) Command {
-	for _, cmd := range a.GetCommands() {
-		if cmd.GetName() == name {
-			return cmd
+// Finds a Command by name and returns it if found.
+func FindCommand(a Application, name string) *Command {
+	for _, c := range a.GetCommands() {
+		if c.Name() == name {
+			return c
 		}
 	}
 	return nil
 }
 
-// Runs the application, scheduling the subcommand.
+// Run runs the application, scheduling the subcommand.
 func Run(a Application, args []string) int {
 	var helpUsed bool
-	initCommands(a, a.GetErr(), &helpUsed)
 
 	// Process general flags first, mainly for -help.
 	flag.Usage = func() {
@@ -164,7 +153,10 @@ func Run(a Application, args []string) int {
 		helpUsed = true
 	}
 
-	// Defaults; do not parse during unit tests because flag.commandLine.errorHandling == ExitOnError. :(
+	// Do not parse during unit tests because flag.commandLine.errorHandling == ExitOnError. :(
+	// It is safer to use a base class embedding CommandRunBase that is then
+	// embedded by each CommandRun implementation to define flags available for
+	// all commands.
 	if args == nil {
 		flag.Parse()
 		args = flag.Args()
@@ -176,12 +168,15 @@ func Run(a Application, args []string) int {
 		return 2
 	}
 
-	if cmd := FindCommand(a, args[0]); cmd != nil {
-		cmd.GetFlags().Parse(args[1:])
+	if c := FindCommand(a, args[0]); c != nil {
+		// Initialize the flags.
+		r := c.CommandRun()
+		initCommand(a, c, r, a.GetErr(), &helpUsed)
+		r.GetFlags().Parse(args[1:])
 		if helpUsed {
 			return 0
 		}
-		return cmd.Run(a, cmd.GetFlags().Args())
+		return r.Run(a, r.GetFlags().Args())
 	}
 
 	fmt.Fprintf(a.GetErr(), "%s: unknown command %#q\n\nRun '%s help' for usage.\n", a.GetName(), args[0], a.GetName())
@@ -205,23 +200,18 @@ func wrapWithLines(s string) string {
 	return s + "\n\n"
 }
 
-type help struct {
-	DefaultCommand
+var cmdHelp = &Command{
+	UsageLine:  "help <command>",
+	ShortDesc:  "prints help about a command",
+	LongDesc:   "Prints an overview of every commands or information about a specific command.",
+	CommandRun: func() CommandRun { return &helpRun{} },
 }
 
-var cmdHelp = &help{
-	DefaultCommand{
-		UsageLine: "help <command>",
-		ShortDesc: "prints help about a command",
-		LongDesc:  "Prints an overview of every commands or information about a specific command.",
-	},
+type helpRun struct {
+	CommandRunBase
 }
 
-func (c *help) InitFlags() {
-	c.Flag = &flag.FlagSet{}
-}
-
-func (c *help) Run(a Application, args []string) int {
+func (c *helpRun) Run(a Application, args []string) int {
 	if len(args) == 0 {
 		usage(a.GetOut(), a)
 		return 0
@@ -232,10 +222,11 @@ func (c *help) Run(a Application, args []string) int {
 	}
 	// Redirects all output to Out.
 	var helpUsed bool
-	initCommands(a, a.GetOut(), &helpUsed)
-
 	if cmd := FindCommand(a, args[0]); cmd != nil {
-		cmd.GetFlags().Usage()
+		// Initialize the flags.
+		r := cmd.CommandRun()
+		initCommand(a, cmd, r, a.GetErr(), &helpUsed)
+		r.GetFlags().Usage()
 		return 0
 	}
 

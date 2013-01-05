@@ -14,7 +14,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -24,48 +23,51 @@ import (
 )
 
 // Common flags.
-func InitCommonFlags() *flag.FlagSet {
-	f := &flag.FlagSet{}
-	f.String("root", os.Getenv("DUMBCAS_ROOT"), "Root directory; required. Set $DUMBCAS_ROOT to set a default.")
-	return f
+type CommonFlags struct {
+	CommandRunBase
+	Root  string
+	cas   CasTable
+	nodes NodesTable
 }
 
-func GetFlagValue(c Command, name string) string {
-	return c.GetFlags().Lookup(name).Value.String()
+func (c *CommonFlags) Init() {
+	c.Flags.StringVar(&c.Root, "root", os.Getenv("DUMBCAS_ROOT"), "Root directory; required. Set $DUMBCAS_ROOT to set a default.")
 }
 
-func CommonFlag(d DumbcasApplication, c Command, createRoot bool, bypassFsck bool) (CasTable, NodesTable, error) {
-	root := GetFlagValue(c, "root")
-	if root == "" {
-		return nil, nil, errors.New("Must provide -root")
+func (c *CommonFlags) Parse(d DumbcasApplication, createRoot bool, bypassFsck bool) error {
+	if c.Root == "" {
+		return errors.New("Must provide -root")
 	}
-	if root2, err := filepath.Abs(root); err != nil {
-		return nil, nil, fmt.Errorf("Failed to find %s", root)
+	if root, err := filepath.Abs(c.Root); err != nil {
+		return fmt.Errorf("Failed to find %s", c.Root)
 	} else {
-		root = root2
+		c.Root = root
 	}
 
 	if createRoot {
-		if err := os.MkdirAll(root, 0750); err != nil && !os.IsExist(err) {
-			return nil, nil, fmt.Errorf("Failed to create %s: %s", root, err)
+		if err := os.MkdirAll(c.Root, 0750); err != nil && !os.IsExist(err) {
+			return fmt.Errorf("Failed to create %s: %s", c.Root, err)
 		}
 	}
 
-	cas, err := d.MakeCasTable(root)
-	if err != nil {
-		return nil, nil, err
+	if cas, err := d.MakeCasTable(c.Root); err != nil {
+		return err
+	} else {
+		c.cas = cas
 	}
-	if cas.GetFsckBit() {
+
+	if c.cas.GetFsckBit() {
 		if !bypassFsck {
-			return nil, nil, fmt.Errorf("Can't run if fsck is needed. Please run fsck first.")
+			return fmt.Errorf("Can't run if fsck is needed. Please run fsck first.")
 		}
 		fmt.Fprintf(os.Stderr, "WARNING: fsck is needed.")
 	}
-	nodes, err := d.LoadNodesTable(root, cas)
-	if err != nil {
-		return nil, nil, err
+	if nodes, err := d.LoadNodesTable(c.Root, c.cas); err != nil {
+		return err
+	} else {
+		c.nodes = nodes
 	}
-	return cas, nodes, nil
+	return nil
 }
 
 type TreeItem struct {

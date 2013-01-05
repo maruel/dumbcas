@@ -14,10 +14,10 @@ import (
 	"os"
 )
 
-var application = DefaultApplication{
+var application = &DefaultApplication{
 	Name:  "dumbcas",
 	Title: "Dumbcas is a simple Content Addressed Datastore to be used as a simple backup tool.",
-	Commands: []Command{
+	Commands: []*Command{
 		cmdArchive,
 		cmdFsck,
 		cmdGc,
@@ -35,7 +35,7 @@ type DumbcasApplication interface {
 }
 
 type dumbapp struct {
-	DefaultApplication
+	*DefaultApplication
 	log *log.Logger
 }
 

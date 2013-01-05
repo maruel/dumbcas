@@ -13,38 +13,36 @@ import (
 	"fmt"
 )
 
-type fsck struct {
-	DefaultCommand
-}
-
-var cmdFsck = &fsck{
-	DefaultCommand{
-		UsageLine: "fsck",
-		ShortDesc: "moves to trash all objects that are not valid content anymore",
-		LongDesc:  "Recalculate the sha-1 of each dumbcas entry and remove any that are corrupted",
+var cmdFsck = &Command{
+	UsageLine: "fsck",
+	ShortDesc: "moves to trash all objects that are not valid content anymore",
+	LongDesc:  "Recalculate the sha-1 of each dumbcas entry and remove any that are corrupted",
+	CommandRun: func() CommandRun {
+		c := &fsckRun{}
+		c.Init()
+		return c
 	},
 }
 
-func (c *fsck) InitFlags() {
-	c.Flag = InitCommonFlags()
+type fsckRun struct {
+	CommonFlags
 }
 
-func fsckMain(a DumbcasApplication, c Command) error {
-	cas, _, err := CommonFlag(a, c, false, true)
-	if err != nil {
+func (c *fsckRun) main(a DumbcasApplication) error {
+	if err := c.Parse(a, false, true); err != nil {
 		return err
 	}
 
 	// TODO(maruel): check nodes too!
 	count := 0
 	corrupted := 0
-	for item := range cas.Enumerate() {
+	for item := range c.cas.Enumerate() {
 		if item.Error != nil {
 			// TODO(maruel): Leaks channel.
 			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)
 		}
 		count += 1
-		f, err := cas.Open(item.Item)
+		f, err := c.cas.Open(item.Item)
 		if err != nil {
 			// TODO(maruel): Leaks channel.
 			return fmt.Errorf("Failed to open %s: %s", item.Item, err)
@@ -59,24 +57,24 @@ func fsckMain(a DumbcasApplication, c Command) error {
 		if actual != item.Item {
 			corrupted += 1
 			a.GetLog().Printf("Found corrupted object, %s != %s", item.Item, actual)
-			if err := cas.Remove(item.Item); err != nil {
+			if err := c.cas.Remove(item.Item); err != nil {
 				// TODO(maruel): Leaks channel.
 				return fmt.Errorf("Failed to trash object %s: %s", item.Item, err)
 			}
 		}
 	}
 	a.GetLog().Printf("Scanned %d entries; found %d corrupted.", count, corrupted)
-	cas.ClearFsckBit()
+	c.cas.ClearFsckBit()
 	return nil
 }
 
-func (c *fsck) Run(a Application, args []string) int {
+func (c *fsckRun) Run(a Application, args []string) int {
 	if len(args) != 0 {
 		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1
 	}
 	d := a.(DumbcasApplication)
-	if err := fsckMain(d, c); err != nil {
+	if err := c.main(d); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)
 		return 1
 	}

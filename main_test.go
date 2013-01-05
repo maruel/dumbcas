@@ -33,5 +33,14 @@ func (a *DumbcasAppMock) Run(args []string, expected int) {
 }
 
 func makeDumbcasAppMock(t *testing.T) *DumbcasAppMock {
-	return &DumbcasAppMock{ApplicationMock: MakeAppMock(t)}
+	return &DumbcasAppMock{ApplicationMock: MakeAppMock(t, application)}
+}
+
+func TestMainHelp(t *testing.T) {
+	t.Parallel()
+	a := MakeAppMock(t, application)
+	args := []string{"help"}
+	r := Run(a, args)
+	a.Assertf(r == 0, "Unexpected return code %d", r)
+	a.CheckBuffer(true, false)
 }

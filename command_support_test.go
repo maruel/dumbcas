@@ -119,7 +119,7 @@ func (tb *TB) Verbose() {
 }
 
 type ApplicationMock struct {
-	DefaultApplication
+	*DefaultApplication
 	*TB
 }
 
@@ -131,27 +131,20 @@ func (a *ApplicationMock) GetErr() io.Writer {
 	return &a.bufErr
 }
 
-type CommandMock struct {
-	Command
-	//flags *flag.FlagSet
-}
-
-/*
-func (c *CommandMock) GetFlags() *flag.FlagSet {
-	return c.flags
-}*/
-
-func MakeAppMock(t *testing.T) *ApplicationMock {
-	a := &ApplicationMock{application, MakeTB(t)}
-	for i, c := range a.Commands {
-		a.Commands[i] = &CommandMock{c}
-	}
-	return a
+func MakeAppMock(t *testing.T, a *DefaultApplication) *ApplicationMock {
+	return &ApplicationMock{a, MakeTB(t)}
 }
 
 func TestHelp(t *testing.T) {
 	t.Parallel()
-	a := MakeAppMock(t)
+	app := &DefaultApplication{
+		Name:  "name",
+		Title: "doc",
+		Commands: []*Command{
+			cmdHelp,
+		},
+	}
+	a := MakeAppMock(t, app)
 	args := []string{"help"}
 	r := Run(a, args)
 	a.Assertf(r == 0, "Unexpected return code %d", r)
@@ -160,7 +153,14 @@ func TestHelp(t *testing.T) {
 
 func TestHelpBadFlag(t *testing.T) {
 	t.Parallel()
-	a := MakeAppMock(t)
+	app := &DefaultApplication{
+		Name:  "name",
+		Title: "doc",
+		Commands: []*Command{
+			cmdHelp,
+		},
+	}
+	a := MakeAppMock(t, app)
 	args := []string{"help", "-foo"}
 	// TODO(maruel): This is inconsistent.
 	r := Run(a, args)
@@ -170,7 +170,14 @@ func TestHelpBadFlag(t *testing.T) {
 
 func TestHelpBadCommand(t *testing.T) {
 	t.Parallel()
-	a := MakeAppMock(t)
+	app := &DefaultApplication{
+		Name:  "name",
+		Title: "doc",
+		Commands: []*Command{
+			cmdHelp,
+		},
+	}
+	a := MakeAppMock(t, app)
 	args := []string{"help", "non_existing_command"}
 	r := Run(a, args)
 	a.Assertf(r == 2, "Unexpected return code %d", r)
@@ -179,7 +186,14 @@ func TestHelpBadCommand(t *testing.T) {
 
 func TestBadCommand(t *testing.T) {
 	t.Parallel()
-	a := MakeAppMock(t)
+	app := &DefaultApplication{
+		Name:  "name",
+		Title: "doc",
+		Commands: []*Command{
+			cmdHelp,
+		},
+	}
+	a := MakeAppMock(t, app)
 	args := []string{"non_existing_command"}
 	r := Run(a, args)
 	a.Assertf(r == 2, "Unexpected return code %d", r)

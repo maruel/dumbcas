@@ -201,6 +201,7 @@ func TestBadCommand(t *testing.T) {
 
 func TestReduceStackTrace(t *testing.T) {
 	t.Parallel()
+	tb := MakeTB(t)
 	data := "/home/joe/gocode/src/github.com/maruel/dumbcas/command_support_test.go:93 (0x43acb9)\n" +
 		"\tcom/maruel/dumbcas.(*TB).Assertf: os.Stderr.Write(ReduceStackTrace(debug.Stack()))\n" +
 		"/home/joe/gocode/src/github.com/maruel/dumbcas/command_support_test.go:109 (0x43aeaf)\n" +
@@ -219,7 +220,5 @@ func TestReduceStackTrace(t *testing.T) {
 		"\tcom/maruel/dumbcas.TestWeb: f.closeWeb()\n"
 
 	actual := string(ReduceStackTrace([]byte(data)))
-	if expected != actual {
-		t.Fatalf("ReduceStackTrace() failed parsing.\nActual:\n%s\n\nExpected:\n%s", expected, actual)
-	}
+	tb.Assertf(expected == actual, "ReduceStackTrace() failed parsing.\nActual:\n%s\n\nExpected:\n%s", expected, actual)
 }

@@ -34,9 +34,7 @@ func makeWebDumbcasAppMock(t *testing.T) *WebDumbcasAppMock {
 }
 
 func (f *WebDumbcasAppMock) goWeb() {
-	if f.socket != nil {
-		f.Fatal("Socket is empty")
-	}
+	f.Assertf(f.socket == nil, "Socket is empty")
 	cmd := FindCommand(f, "web")
 	r := cmd.CommandRun().(*webRun)
 	r.Root = "\\foo"
@@ -62,48 +60,34 @@ func (f *WebDumbcasAppMock) closeWeb() {
 
 func (f *WebDumbcasAppMock) get(url string, expectedUrl string) *http.Response {
 	r, err := http.Get(f.baseUrl + url)
-	if err != nil {
-		f.Fatal(err)
-	}
-	if expectedUrl != "" && r.Request.URL.Path != expectedUrl {
-		f.Fatalf("%s != %s", expectedUrl, r.Request.URL.Path)
-	}
+	f.Assertf(err == nil, "Oops: %s", err)
+	f.Assertf(expectedUrl == "" || r.Request.URL.Path == expectedUrl, "%s != %s", expectedUrl, r.Request.URL.Path)
 	return r
 }
 
 func (f *WebDumbcasAppMock) get404(url string) {
 	r, err := http.Get(f.baseUrl + url)
-	if err != nil {
-		f.Fatal(err)
-	}
-	if r.StatusCode != 404 {
-		f.Fatal(r.StatusCode, r.Body)
-	}
+	f.Assertf(err == nil, "Oops: %s", err)
+	f.Assertf(r.StatusCode == 404, "Expected 404, got %d. %s", r.StatusCode, r.Body)
 }
 
-func readBody(t *testing.T, r *http.Response) string {
+func readBody(t *TB, r *http.Response) string {
 	bytes, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Assertf(err == nil, "Oops: %s", err)
 	r.Body.Close()
 	return string(bytes)
 }
 
-func expectedBody(t *testing.T, r *http.Response, expected string) {
+func expectedBody(t *TB, r *http.Response, expected string) {
 	actual := readBody(t, r)
-	if actual != expected {
-		t.Fatalf("%v != %v", expected, actual)
-	}
+	t.Assertf(actual == expected, "%v != %v", expected, actual)
 }
 
 func TestWeb(t *testing.T) {
 	t.Parallel()
 	f := makeWebDumbcasAppMock(t)
 	cmd := FindCommand(f, "web")
-	if cmd == nil {
-		t.Fatal("Failed to find 'web'")
-	}
+	f.Assertf(cmd != nil, "Failed to find 'web'")
 	run := cmd.CommandRun().(*webRun)
 	// Sets -root to an invalid non-empty string.
 	run.Root = "\\foo"
@@ -115,7 +99,7 @@ func TestWeb(t *testing.T) {
 		"file1":           "content1",
 		"dir1/dir2/file2": "content2",
 	}
-	sha1tree, nodeName, sha1 := archiveData(t, f.cas, f.nodes, tree1)
+	sha1tree, nodeName, sha1 := archiveData(f.TB, f.cas, f.nodes, tree1)
 
 	f.log.Print("T: Serve over web and verify files are accessible.")
 	f.goWeb()
@@ -123,56 +107,26 @@ func TestWeb(t *testing.T) {
 	r := f.get("/content/retrieve/nodes", "/content/retrieve/nodes/")
 	month := time.Now().UTC().Format("2006-01")
 	expected := fmt.Sprintf("<html><body><pre><a href=\"%s/\">%s/</a>\n<a href=\"tags/\">tags/</a>\n</pre></body></html>", month, month)
-	expectedBody(t, r, expected)
+	expectedBody(f.TB, r, expected)
 	f.log.Print("T: Get the directory.")
 	r = f.get("/content/retrieve/nodes/"+month, "/content/retrieve/nodes/"+month+"/")
-	actual := readBody(t, r)
+	actual := readBody(f.TB, r)
 	re := regexp.MustCompile("\\\"(.*)\\\"")
 	nodeItems := re.FindStringSubmatch(actual)
-	if len(nodeItems) != 2 {
-		t.Fatal(actual)
-	}
+	f.Assertf(len(nodeItems) == 2, "%s", actual)
+	f.Assertf(month+"/"+nodeItems[1] == nodeName, "Unexpected grep")
+
 	f.log.Print("T: Get the node.")
-	if month+"/"+nodeItems[1] != nodeName {
-		t.Fatal("Unexpected grep")
-	}
 	r = f.get("/content/retrieve/nodes/"+nodeName, "/content/retrieve/nodes/"+nodeName+"/")
 	expected = "<html><body><pre><a href=\"dir1/\">dir1/</a>\n<a href=\"file1\">file1</a>\n</pre></body></html>"
-	expectedBody(t, r, expected)
+	expectedBody(f.TB, r, expected)
 
 	r = f.get("/content/retrieve/default/"+sha1tree["file1"], "/content/retrieve/default/"+sha1tree["file1"])
-	expectedBody(t, r, "content1")
+	expectedBody(f.TB, r, "content1")
 	r = f.get("/content/retrieve/nodes/"+nodeName+"/file1", "")
-	expectedBody(t, r, "content1")
+	expectedBody(f.TB, r, "content1")
 	r = f.get("/content/retrieve/nodes/"+nodeName+"/dir1/dir2/file2", "")
-	expectedBody(t, r, "content2")
+	expectedBody(f.TB, r, "content2")
 
 	f.closeWeb()
-	/*
-		f.log.Print("T: Remove dir1/dir2/dir3/foo, archive again and gc.")
-		// ...
-		f.log.Print("T: Lookup dir1/dir2/dir3/foo is still present in the backup")
-		f.goWeb()
-		r = f.get("/content/retrieve/nodes/"+nodeName+"/dir1/dir2/dir3/foo", "")
-		expectedBody(t, r, tree["dir1/dir2/dir3/foo"])
-		r = f.get("/content/retrieve/nodes/"+nodeName+"/dir1/bar", "")
-		expectedBody(t, r, tree["dir1/bar"])
-		f.closeWeb()
-
-		f.log.Print("T: Remove the node, gc and lookup with web the file is not present anymore.")
-		// ...
-
-		f.goWeb()
-		f.get404("/content/retrieve/nodes/" + month + "/" + nodeName + f.tempData + "/dir1/dir2/dir3/foo")
-		r = f.get("/content/retrieve/nodes/"+month+"/"+nodeName+f.tempData+"/dir1/bar", "")
-		expectedBody(t, r, tree["dir1/bar"])
-		f.closeWeb()
-
-		f.log.Print("T: Corrupt and fsck.")
-		// ...
-		// Lookup with web the file is not present anymore.
-		f.goWeb()
-		f.get404("/content/retrieve/nodes/" + nodeName + "/dir1/bar")
-		f.closeWeb()
-	*/
 }

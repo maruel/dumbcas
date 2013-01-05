@@ -47,35 +47,30 @@ func (a *DumbcasAppMock) LoadCache() (Cache, error) {
 
 func TestCacheNormal(t *testing.T) {
 	t.Parallel()
+	tb := MakeTB(t)
 	cache, err := loadCache()
-	if err != nil {
-		t.Fatal(err)
-	}
+	tb.Assertf(err == nil, "Oops")
 	defer cache.Close()
-	if cache.Root() == nil {
-		t.Fatal(err)
-	}
+	tb.Assertf(cache.Root() != nil, "Oops")
 }
 
 func TestCachePath(t *testing.T) {
 	t.Parallel()
+	tb := MakeTB(t)
 	p, err := getCachePath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !filepath.IsAbs(p) {
-		t.Fatal(p)
-	}
+	tb.Assertf(err == nil, "Oops")
+	tb.Assertf(filepath.IsAbs(p), "Oops")
 }
 
 func TestCacheRedirected(t *testing.T) {
 	t.Parallel()
-	tempData := makeTempDir(t, "cache")
+	tb := MakeTB(t)
+	tempData := makeTempDir(tb, "cache")
 	defer removeTempDir(tempData)
 	load := func() (Cache, error) {
 		return loadCacheInner(tempData)
 	}
-	testCacheImpl(t, load)
+	testCacheImpl(tb, load)
 }
 
 func TestCacheMock(t *testing.T) {
@@ -85,16 +80,14 @@ func TestCacheMock(t *testing.T) {
 	load := func() (Cache, error) {
 		return mock, nil
 	}
-	testCacheImpl(t, load)
+	testCacheImpl(tb, load)
 }
 
-func testCacheImpl(t *testing.T, load func() (Cache, error)) {
+func testCacheImpl(t *TB, load func() (Cache, error)) {
 	now := time.Now().UTC().Unix()
 	{
 		c, err := load()
-		if err != nil {
-			t.Fatalf("Failed to create cache", err)
-		}
+		t.Assertf(err == nil, "Failed to create cache", err)
 		if c.Root().CountMembers() != 1 {
 			c.Root().Print(os.Stderr, "")
 			t.Fatalf("Oops: %d", c.Root().CountMembers())
@@ -109,9 +102,7 @@ func testCacheImpl(t *testing.T, load func() (Cache, error)) {
 	}
 	{
 		c, err := load()
-		if err != nil {
-			t.Fatalf("Failed to create cache", err)
-		}
+		t.Assertf(err == nil, "Failed to create cache", err)
 		if c.Root().CountMembers() != 2 {
 			c.Root().Print(os.Stderr, "")
 			t.Fatalf("Oops: %d", c.Root().CountMembers())

@@ -16,6 +16,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sort"
 	"testing"
 )
 
@@ -111,8 +112,34 @@ func (b Buffer) Close() error {
 	return nil
 }
 
+// Returns a sorted list of all the entries.
+func EnumerateAsList(t *TB, cas CasTable) []string {
+	items := []string{}
+	for v := range cas.Enumerate() {
+		t.Assertf(v.Error == nil, "Unexpected failure")
+		// Hardcoded for sha1.
+		t.Assertf(len(v.Item) == 40, "Unexpected sha1 entry %s", v.Item)
+		items = append(items, v.Item)
+	}
+	sort.Strings(items)
+	return items
+}
+
+func Equals(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestPrefixSpace(t *testing.T) {
 	t.Parallel()
+	tb := MakeTB(t)
 	type S struct {
 		i int
 		s string
@@ -126,24 +153,20 @@ func TestPrefixSpace(t *testing.T) {
 	}
 	for prefixLength, s := range checks {
 		x := prefixSpace(uint(prefixLength))
-		if x != s.i {
-			t.Fatalf("%d: %d != %d", prefixLength, x, s.i)
-		}
+		tb.Assertf(x == s.i, "%d: %d != %d", prefixLength, x, s.i)
 		if x != 0 {
 			res := fmt.Sprintf("%0*x", prefixLength, x-1)
-			if res != s.s {
-				t.Fatalf("%d: %s != %s", prefixLength, res, s.s)
-			}
+			tb.Assertf(res == s.s, "%d: %s != %s", prefixLength, res, s.s)
 		}
 	}
 }
 
 func TestCasTableImpl(t *testing.T) {
 	t.Parallel()
-	tempData := makeTempDir(t, "cas")
+	tb := MakeTB(t)
+	tempData := makeTempDir(tb, "cas")
 	defer removeTempDir(tempData)
 
-	tb := MakeTB(t)
 	cas, err := makeCasTable(tempData)
 	tb.Assertf(err == nil, "Unexpected error: %s", err)
 	testCasTableImpl(tb, cas)
@@ -157,31 +180,22 @@ func TestCasTableNode(t *testing.T) {
 }
 
 func testCasTableImpl(t *TB, cas CasTable) {
-	for _ = range cas.Enumerate() {
-		t.Fatal("Found unexpected value")
-	}
+	items := EnumerateAsList(t, cas)
+	t.Assertf(len(items) == 0, "Found unexpected values: %q", items)
 
 	file1, err := AddBytes(cas, []byte("content1"))
 	t.Assertf(err == nil, "Unexpected error: %s", err)
 
-	count := 0
-	for v := range cas.Enumerate() {
-		t.Assertf(v.Item == file1, "Found unexpected value: %s != %s", v.Item, file1)
-		count++
-	}
-	t.Assertf(count == 1, "Found %d items", count)
+	items = EnumerateAsList(t, cas)
+	t.Assertf(Equals(items, []string{file1}), "Found unexpected values: %q != %s", items, file1)
 
 	// Add the same content.
 	file2, err := AddBytes(cas, []byte("content1"))
 	t.Assertf(os.IsExist(err), "Unexpected error: %s", err)
 	t.Assertf(file1 == file2, "Hash mismatch %s != %s", file1, file2)
 
-	count = 0
-	for v := range cas.Enumerate() {
-		t.Assertf(v.Item == file1, "Found unexpected value: %s != %s", v.Item, file1)
-		count++
-	}
-	t.Assertf(count == 1, "Found %d items", count)
+	items = EnumerateAsList(t, cas)
+	t.Assertf(Equals(items, []string{file1}), "Found unexpected values: %q != %s", items, file1)
 
 	f, err := cas.Open(file1)
 	t.Assertf(err == nil, "Unexpected error: %s", err)

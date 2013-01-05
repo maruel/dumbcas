@@ -15,7 +15,6 @@ import (
 	"math/big"
 	"os"
 	"path"
-	"testing"
 )
 
 func GetRandRune() rune {
@@ -29,7 +28,7 @@ func GetRandRune() rune {
 }
 
 // Creates a temporary directory.
-func makeTempDir(t *testing.T, name string) string {
+func makeTempDir(t *TB, name string) string {
 	prefix := "dumbcas_" + name + "_"
 	length := 8
 	tempDir := os.TempDir()
@@ -47,7 +46,7 @@ func makeTempDir(t *testing.T, name string) string {
 		}
 		return tempFull
 	}
-	t.Fatal("Internal error")
+	t.Assertf(false, "Internal error")
 	return ""
 }
 

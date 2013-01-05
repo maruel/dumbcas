@@ -131,10 +131,10 @@ func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
 
 func TestNodesTable(t *testing.T) {
 	t.Parallel()
-	tempData := makeTempDir(t, "nodes")
+	tb := MakeTB(t)
+	tempData := makeTempDir(tb, "nodes")
 	defer removeTempDir(tempData)
 
-	tb := MakeTB(t)
 	cas := &mockCasTable{make(map[string][]byte), false, tb}
 	nodes, err := loadNodesTable(tempData, cas, tb.log)
 	tb.Assertf(err == nil, "Unexpected error: %s", err)
@@ -152,37 +152,28 @@ func TestNodesTableMock(t *testing.T) {
 
 func request(t *TB, nodes NodesTable, path string, expectedCode int, expectedBody string) string {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBufferString("GET " + path + " HTTP/1.1\r\nHost: test\r\n\r\n")))
-	if err != nil {
-		t.Fatalf("%s: %s", path, err)
-	}
+	t.Assertf(err == nil, "%s: %s", path, err)
+
 	resp := httptest.NewRecorder()
 	nodes.ServeHTTP(resp, req)
 	bytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Assertf(err == nil, "%s: %s", path, err)
+
 	body := string(bytes)
-	if resp.Code != expectedCode {
-		t.Errorf(body)
-		t.Fatalf("%s: %d != %d", path, expectedCode, resp.Code)
-	}
-	if expectedBody != "" && body != expectedBody {
-		t.Fatalf("%s: %#s != %#s", path, expectedBody, body)
-	}
+	t.Assertf(resp.Code == expectedCode, "%s: %d != %d\n%s", path, expectedCode, resp.Code, body)
+	t.Assertf(expectedBody == "" || body == expectedBody, "%s: %#s != %#s", path, expectedBody, body)
 	return body
 }
 
 // Archives a tree fictious data.
 // Returns (tree of sha1s, name of the node, sha1 of the node entry).
 // Accept the paths as posix.
-func archiveData(t *testing.T, cas CasTable, nodes NodesTable, tree map[string]string) (map[string]string, string, string) {
+func archiveData(t *TB, cas CasTable, nodes NodesTable, tree map[string]string) (map[string]string, string, string) {
 	sha1tree := map[string]string{}
 	entries := &Entry{}
 	for k, v := range tree {
 		h, err := AddBytes(cas, []byte(v))
-		if err != nil {
-			t.Fatal(err)
-		}
+		t.Assertf(err == nil, "Oops")
 		sha1tree[k] = h
 
 		e := entries
@@ -207,23 +198,15 @@ func archiveData(t *testing.T, cas CasTable, nodes NodesTable, tree map[string]s
 
 	// Then process entries itself.
 	data, err := json.Marshal(entries)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Assertf(err == nil, "Oops")
 	entrySha1, err := AddBytes(cas, data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Assertf(err == nil, "Oops")
 
 	// And finally add the node.
 	now := time.Now().UTC()
 	nodeName, err := nodes.AddEntry(&Node{entrySha1, "useful comment"}, "fictious")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.HasPrefix(nodeName, now.Format("2006-01/")) {
-		t.Fatalf("Invalid node name %s", nodeName)
-	}
+	t.Assertf(err == nil, "Oops")
+	t.Assertf(strings.HasPrefix(nodeName, now.Format("2006-01/")), "Invalid node name %s", nodeName)
 	return sha1tree, nodeName, entrySha1
 }
 
@@ -236,7 +219,7 @@ func testNodesTableImpl(t *TB, cas CasTable, nodes NodesTable) {
 		"file1":           "content1",
 		"dir1/dir2/file2": "content2",
 	}
-	archiveData(t.T, cas, nodes, tree1)
+	archiveData(t, cas, nodes, tree1)
 	count := 0
 	name := ""
 	for v := range nodes.Enumerate() {
@@ -248,9 +231,7 @@ func testNodesTableImpl(t *TB, cas CasTable, nodes NodesTable) {
 	}
 
 	body := request(t, nodes, "/", 200, "")
-	if strings.Count(body, "<a ") != 2 {
-		t.Fatal("Unexpected output:\n%s", body)
-	}
+	t.Assertf(strings.Count(body, "<a ") == 2, "Unexpected output:\n%s", body)
 	request(t, nodes, "/foo", 404, "")
 	request(t, nodes, "/foo/", 404, "")
 	request(t, nodes, "/"+name, 301, "")

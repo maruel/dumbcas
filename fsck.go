@@ -11,6 +11,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 )
 
 var cmdFsck = &Command{
@@ -64,6 +65,9 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 	}
 	a.GetLog().Printf("Scanned %d entries in CasTable; found %d corrupted.", count, corrupted)
 
+	// TODO(maruel): Get the value from CasTable.
+	hashLength := 40
+	resha1 := regexp.MustCompile(fmt.Sprintf("^([a-f0-9]{%d})$", hashLength))
 	count = 0
 	corrupted = 0
 	for item := range c.nodes.Enumerate() {
@@ -72,9 +76,30 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 		// TODO(maruel): This is a layering error.
 		if item.Error != nil {
 			a.GetLog().Printf("While enumerating the Nodes table: %s", item.Error)
-			corrupted++
+			continue
 		}
 		count++
+		f, err := c.nodes.Open(item.Item)
+		if err != nil {
+			a.GetLog().Printf("Failed opening node %s: %s", item.Item, err)
+			c.nodes.Remove(item.Item)
+			corrupted++
+			continue
+		}
+		defer f.Close()
+		node := &Node{}
+		if err := loadReaderAsJson(f, node); err != nil {
+			a.GetLog().Printf("Failed opening node %s: %s", item.Item, err)
+			c.nodes.Remove(item.Item)
+			corrupted++
+			continue
+		}
+		if !resha1.MatchString(node.Entry) {
+			a.GetLog().Printf("Node %s is corrupted: %v", item.Item, node)
+			c.nodes.Remove(item.Item)
+			corrupted++
+			continue
+		}
 	}
 	a.GetLog().Printf("Scanned %d entries in NodesTable; found %d corrupted.", count, corrupted)
 

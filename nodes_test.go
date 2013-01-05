@@ -26,7 +26,7 @@ import (
 )
 
 type mockNodesTable struct {
-	entries map[string]Node
+	entries map[string][]byte
 	cas     CasTable
 	t       *TB
 }
@@ -34,7 +34,7 @@ type mockNodesTable struct {
 func (a *DumbcasAppMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
 	//return loadNodesTable(rootDir, cas, a.GetLog())
 	if a.nodes == nil {
-		a.nodes = &mockNodesTable{make(map[string]Node), a.cas, a.TB}
+		a.nodes = &mockNodesTable{make(map[string][]byte), a.cas, a.TB}
 	}
 	return a.nodes, nil
 }
@@ -53,7 +53,13 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					localRedirect(w, r, path.Base(r.URL.Path)+"/")
 					return
 				}
-				entry, err := LoadEntry(m.cas, v.Entry)
+
+				node := &Node{}
+				if err := json.Unmarshal(v, node); err != nil {
+					http.Error(w, fmt.Sprintf("Failed to load the entry file: %s", err), http.StatusNotFound)
+					return
+				}
+				entry, err := LoadEntry(m.cas, node.Entry)
 				if err != nil {
 					http.Error(w, fmt.Sprintf("Failed to load the entry file: %s", err), http.StatusNotFound)
 					return
@@ -95,6 +101,10 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
 	m.t.log.Printf("mockNodesTable.AddEntry(%s)", name)
+	data, err := json.Marshal(node)
+	if err != nil {
+		return "", fmt.Errorf("Failed to marshall internal state: %s", err)
+	}
 
 	now := time.Now().UTC()
 	monthName := now.Format("2006-01")
@@ -108,13 +118,14 @@ func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
 		}
 		nodePath = path.Join(monthName, nodeName)
 		if _, ok := m.entries[nodePath]; !ok {
-			m.entries[nodePath] = *node
+			m.entries[nodePath] = data
 			break
 		}
 		// Try ad nauseam.
 		suffix += 1
 	}
-	m.entries[tagsName+"/"+name] = *node
+	// The real implementation creates a symlink if possible.
+	m.entries[tagsName+"/"+name] = data
 	return nodePath, nil
 }
 
@@ -123,18 +134,21 @@ func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
 	c := make(chan NodeEntry)
 	go func() {
 		// TODO(maruel): Will blow up if mutated concurrently.
-		for k, v := range m.entries {
-			// TODO(maruel): This check shouldn't be done here.
-			if len(v.Entry) != 40 {
-				c <- NodeEntry{Error: fmt.Errorf("Corrupted node %s", v.Entry)}
-				delete(m.entries, k)
-			} else {
-				c <- NodeEntry{RelPath: k, Node: &v}
-			}
+		for k, _ := range m.entries {
+			c <- NodeEntry{Item: k}
 		}
 		close(c)
 	}()
 	return c
+}
+
+func (m *mockNodesTable) Open(item string) (ReadSeekCloser, error) {
+	m.t.log.Printf("mockNodesTable.Open(%s)", item)
+	data, ok := m.entries[item]
+	if !ok {
+		return nil, fmt.Errorf("Missing: %s", item)
+	}
+	return Buffer{bytes.NewReader(data)}, nil
 }
 
 func (m *mockNodesTable) Remove(name string) error {
@@ -150,7 +164,7 @@ func EnumerateNodesAsList(t *TB, nodes NodesTable) []string {
 	items := []string{}
 	for v := range nodes.Enumerate() {
 		t.Assertf(v.Error == nil, "Unexpected failure")
-		items = append(items, v.RelPath)
+		items = append(items, v.Item)
 	}
 	sort.Strings(items)
 	return items
@@ -173,7 +187,7 @@ func TestNodesTableMock(t *testing.T) {
 	t.Parallel()
 	tb := MakeTB(t)
 	cas := &mockCasTable{make(map[string][]byte), false, tb}
-	nodes := &mockNodesTable{make(map[string]Node), cas, tb}
+	nodes := &mockNodesTable{make(map[string][]byte), cas, tb}
 	testNodesTableImpl(tb, cas, nodes)
 }
 

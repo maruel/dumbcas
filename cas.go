@@ -43,7 +43,7 @@ type CasTable interface {
 	http.Handler
 	// Enumerates all the entries in the table.
 	Enumerate() <-chan CasEntry
-	// Add an entry to the table.
+	// Adds an entry to the table.
 	AddEntry(source io.Reader, hash string) error
 	// Opens an entry for reading.
 	Open(hash string) (ReadSeekCloser, error)

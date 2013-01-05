@@ -38,16 +38,18 @@ type Node struct {
 }
 
 type NodeEntry struct {
-	RelPath string
-	Node    *Node
-	Error   error
+	Item  string
+	Error error
 }
 
 type NodesTable interface {
 	http.Handler
-	AddEntry(node *Node, name string) (string, error)
 	// Enumerates all the entries in the table.
 	Enumerate() <-chan NodeEntry
+	// Adds a node to the table.
+	AddEntry(node *Node, name string) (string, error)
+	// Opens an entry for reading.
+	Open(hash string) (ReadSeekCloser, error)
 	// Removes a node enumerated by Enumerate().
 	Remove(name string) error
 }
@@ -150,9 +152,11 @@ func (n *nodesTable) AddEntry(node *Node, name string) (string, error) {
 	return path.Join(monthName, nodeName), nil
 }
 
-// Enumerates all the entries in the table. If a file or directory is found in
-// the directory tree that doesn't match the expected format, it will
-// automatically be moved into the trash.
+func (n *nodesTable) Open(item string) (ReadSeekCloser, error) {
+	return os.Open(path.Join(n.nodesDir, item))
+}
+
+// Enumerates all the entries in the table.
 func (n *nodesTable) Enumerate() <-chan NodeEntry {
 	items := make(chan NodeEntry)
 	c := EnumerateTree(n.nodesDir)
@@ -179,15 +183,7 @@ func (n *nodesTable) Enumerate() <-chan NodeEntry {
 					// TODO(maruel): Cancel iterating inside the directory!
 					continue
 				}
-				// TODO(maruel): This shouldn't be done here.
-				node := &Node{}
-				if err := loadFileAsJson(v.FullPath, node); err != nil {
-					n.trash.Move(relPath)
-					n.cas.SetFsckBit()
-					items <- NodeEntry{Error: fmt.Errorf("Failed reading %s", relPath)}
-					continue
-				}
-				items <- NodeEntry{RelPath: relPath, Node: node}
+				items <- NodeEntry{Item: relPath}
 			}
 		}
 		close(items)
@@ -200,6 +196,8 @@ func (n *nodesTable) Remove(name string) error {
 	return n.trash.Move(name)
 }
 
+// LoadEntry is an utility functiont that loads an node stored in the CasTable
+// into an Entry instance.
 func LoadEntry(cas CasTable, hash string) (*Entry, error) {
 	f, err := cas.Open(hash)
 	if err != nil {

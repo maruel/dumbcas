@@ -66,7 +66,7 @@ func TestFsckCorruptNodeEntry(t *testing.T) {
 
 	// Corrupt an item in NodesTable.
 	nodesMock := f.nodes.(*mockNodesTable)
-	nodesMock.entries["tags/fictious"] = Node{}
+	nodesMock.entries["tags/fictious"] = []byte("Invalid Json")
 	f.Run(args, 0)
 
 	i1 := EnumerateCasAsList(f.TB, f.cas)

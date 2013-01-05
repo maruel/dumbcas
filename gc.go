@@ -59,8 +59,22 @@ func (c *gcRun) main(a DumbcasApplication) error {
 			// TODO(maruel): Leaks channel.
 			return item.Error
 		}
-		entries[item.Node.Entry] = true
-		entry, err := LoadEntry(c.cas, item.Node.Entry)
+		f, err := c.nodes.Open(item.Item)
+		if err != nil {
+			// TODO(maruel): Leaks channel.
+			c.cas.SetFsckBit()
+			return fmt.Errorf("Failed opening node %s: %s", item.Item, err)
+		}
+		defer f.Close()
+		node := &Node{}
+		if err := loadReaderAsJson(f, node); err != nil {
+			// TODO(maruel): Leaks channel.
+			c.cas.SetFsckBit()
+			return fmt.Errorf("Failed opening node %s: %s", item.Item, err)
+		}
+
+		entries[node.Entry] = true
+		entry, err := LoadEntry(c.cas, node.Entry)
 		if err != nil {
 			return err
 		}

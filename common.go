@@ -17,10 +17,33 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 )
+
+type Table interface {
+	// Must be able to efficiently respond to an HTTP GET request.
+	http.Handler
+	// Enumerates all the entries in the table.
+	Enumerate() <-chan EnumerationEntry
+	// Opens an entry for reading.
+	Open(name string) (ReadSeekCloser, error)
+	// Removes a node enumerated by Enumerate().
+	Remove(name string) error
+}
+
+type EnumerationEntry struct {
+	Item  string
+	Error error
+}
+
+type ReadSeekCloser interface {
+	io.Reader
+	io.Seeker
+	io.Closer
+}
 
 // Common flags.
 type CommonFlags struct {

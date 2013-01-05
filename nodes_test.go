@@ -129,13 +129,13 @@ func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
 	return nodePath, nil
 }
 
-func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
+func (m *mockNodesTable) Enumerate() <-chan EnumerationEntry {
 	m.t.log.Printf("mockNodesTable.Enumerate() %d", len(m.entries))
-	c := make(chan NodeEntry)
+	c := make(chan EnumerationEntry)
 	go func() {
 		// TODO(maruel): Will blow up if mutated concurrently.
 		for k, _ := range m.entries {
-			c <- NodeEntry{Item: k}
+			c <- EnumerationEntry{Item: k}
 		}
 		close(c)
 	}()

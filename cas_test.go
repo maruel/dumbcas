@@ -39,7 +39,7 @@ func (m *mockCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(m.entries[r.URL.Path[1:]])
 }
 
-func (m *mockCasTable) Enumerate() <-chan CasEntry {
+func (m *mockCasTable) Enumerate() <-chan EnumerationEntry {
 	// First make a copy of the keys.
 	keys := make([]string, len(m.entries))
 	i := 0
@@ -48,10 +48,10 @@ func (m *mockCasTable) Enumerate() <-chan CasEntry {
 		i++
 	}
 	m.t.log.Printf("mockCasTable.Enumerate() %d", len(keys))
-	c := make(chan CasEntry)
+	c := make(chan EnumerationEntry)
 	go func() {
 		for _, k := range keys {
-			c <- CasEntry{Item: k}
+			c <- EnumerationEntry{Item: k}
 		}
 		close(c)
 	}()

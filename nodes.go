@@ -37,21 +37,10 @@ type Node struct {
 	Comment string `json:",omitempty"`
 }
 
-type NodeEntry struct {
-	Item  string
-	Error error
-}
-
 type NodesTable interface {
-	http.Handler
-	// Enumerates all the entries in the table.
-	Enumerate() <-chan NodeEntry
+	Table
 	// Adds a node to the table.
 	AddEntry(node *Node, name string) (string, error)
-	// Opens an entry for reading.
-	Open(hash string) (ReadSeekCloser, error)
-	// Removes a node enumerated by Enumerate().
-	Remove(name string) error
 }
 
 type nodesTable struct {
@@ -157,8 +146,8 @@ func (n *nodesTable) Open(item string) (ReadSeekCloser, error) {
 }
 
 // Enumerates all the entries in the table.
-func (n *nodesTable) Enumerate() <-chan NodeEntry {
-	items := make(chan NodeEntry)
+func (n *nodesTable) Enumerate() <-chan EnumerationEntry {
+	items := make(chan EnumerationEntry)
 	c := EnumerateTree(n.nodesDir)
 	go func() {
 		for {
@@ -172,7 +161,7 @@ func (n *nodesTable) Enumerate() <-chan NodeEntry {
 					return
 				}
 				if v.Error != nil {
-					items <- NodeEntry{Error: v.Error}
+					items <- EnumerationEntry{Error: v.Error}
 					continue
 				}
 				if v.FileInfo.IsDir() {
@@ -183,7 +172,7 @@ func (n *nodesTable) Enumerate() <-chan NodeEntry {
 					// TODO(maruel): Cancel iterating inside the directory!
 					continue
 				}
-				items <- NodeEntry{Item: relPath}
+				items <- EnumerationEntry{Item: relPath}
 			}
 		}
 		close(items)

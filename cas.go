@@ -24,11 +24,6 @@ import (
 const casName = "cas"
 const needFsckName = "need_fsck"
 
-type CasEntry struct {
-	Item  string
-	Error error
-}
-
 type casTable struct {
 	rootDir      string
 	casDir       string
@@ -39,28 +34,15 @@ type casTable struct {
 }
 
 type CasTable interface {
-	// Serves the table over HTTP GET interface.
-	http.Handler
-	// Enumerates all the entries in the table.
-	Enumerate() <-chan CasEntry
-	// Adds an entry to the table.
-	AddEntry(source io.Reader, hash string) error
-	// Opens an entry for reading.
-	Open(hash string) (ReadSeekCloser, error)
-	// Removes an entry in the table.
-	Remove(item string) error
+	Table
+	// Adds a node to the table.
+	AddEntry(source io.Reader, name string) error
 	// Sets the bit that the table needs to be checked for consistency.
 	SetFsckBit()
 	// Returns if the fsck bit is set.
 	GetFsckBit() bool
 	// Clears the fsck bit.
 	ClearFsckBit()
-}
-
-type ReadSeekCloser interface {
-	io.Reader
-	io.Seeker
-	io.Closer
 }
 
 // Converts an entry in the table into a proper file path.
@@ -137,16 +119,16 @@ func (c *casTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Enumerates all the entries in the table. If a file or directory is found in
 // the directory tree that doesn't match the expected format, it will be moved
 // into the trash.
-func (c *casTable) Enumerate() <-chan CasEntry {
+func (c *casTable) Enumerate() <-chan EnumerationEntry {
 	rePrefix := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", c.prefixLength))
 	reRest := regexp.MustCompile(fmt.Sprintf("^[a-f0-9]{%d}$", c.hashLength-c.prefixLength))
-	items := make(chan CasEntry)
+	items := make(chan EnumerationEntry)
 
 	// TODO(maruel): No need to read all at once.
 	go func() {
 		prefixes, err := readDirNames(c.casDir)
 		if err != nil {
-			items <- CasEntry{Error: fmt.Errorf("Failed reading ss", c.casDir)}
+			items <- EnumerationEntry{Error: fmt.Errorf("Failed reading ss", c.casDir)}
 		} else {
 			for _, prefix := range prefixes {
 				if IsInterrupted() {
@@ -164,7 +146,7 @@ func (c *casTable) Enumerate() <-chan CasEntry {
 				prefixPath := path.Join(c.casDir, prefix)
 				subitems, err := readDirNames(prefixPath)
 				if err != nil {
-					items <- CasEntry{Error: fmt.Errorf("Failed reading %s", prefixPath)}
+					items <- EnumerationEntry{Error: fmt.Errorf("Failed reading %s", prefixPath)}
 					c.SetFsckBit()
 					continue
 				}
@@ -174,7 +156,7 @@ func (c *casTable) Enumerate() <-chan CasEntry {
 						c.SetFsckBit()
 						continue
 					}
-					items <- CasEntry{Item: prefix + item}
+					items <- EnumerationEntry{Item: prefix + item}
 				}
 			}
 		}

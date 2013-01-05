@@ -124,7 +124,13 @@ func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
 	go func() {
 		// TODO(maruel): Will blow up if mutated concurrently.
 		for k, v := range m.entries {
-			c <- NodeEntry{RelPath: k, Node: &v}
+			// TODO(maruel): This check shouldn't be done here.
+			if len(v.Entry) != 40 {
+				c <- NodeEntry{Error: fmt.Errorf("Corrupted node %s", v.Entry)}
+				delete(m.entries, k)
+			} else {
+				c <- NodeEntry{RelPath: k, Node: &v}
+			}
 		}
 		close(c)
 	}()

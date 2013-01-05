@@ -33,13 +33,12 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 		return err
 	}
 
-	// TODO(maruel): check nodes too!
 	count := 0
 	corrupted := 0
 	for item := range c.cas.Enumerate() {
 		if item.Error != nil {
-			// TODO(maruel): Leaks channel.
-			return fmt.Errorf("Failed enumerating the CAS table %s", item.Error)
+			a.GetLog().Printf("While enumerating the CAS table: %s", item.Error)
+			continue
 		}
 		count += 1
 		f, err := c.cas.Open(item.Item)
@@ -52,7 +51,7 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 		if err != nil {
 			// Probably Disk error.
 			// TODO(maruel): Leaks channel.
-			return fmt.Errorf("Aborting! Failed to sha1 %s: %s", item.Item, err)
+			return fmt.Errorf("Aborting! Failed to calcultate the sha1 of %s: %s. Please find a valid copy of your CAS table ASAP.", item.Item, err)
 		}
 		if actual != item.Item {
 			corrupted += 1
@@ -63,7 +62,22 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 			}
 		}
 	}
-	a.GetLog().Printf("Scanned %d entries; found %d corrupted.", count, corrupted)
+	a.GetLog().Printf("Scanned %d entries in CasTable; found %d corrupted.", count, corrupted)
+
+	count = 0
+	corrupted = 0
+	for item := range c.nodes.Enumerate() {
+		// TODO(maruel): Can't differentiate between an I/O error or a corrupted node.
+		// NodesTable.Enumerate() automatically clears corrupted nodes.
+		// TODO(maruel): This is a layering error.
+		if item.Error != nil {
+			a.GetLog().Printf("While enumerating the Nodes table: %s", item.Error)
+			corrupted++
+		}
+		count++
+	}
+	a.GetLog().Printf("Scanned %d entries in NodesTable; found %d corrupted.", count, corrupted)
+
 	c.cas.ClearFsckBit()
 	return nil
 }

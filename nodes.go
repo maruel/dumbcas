@@ -151,8 +151,8 @@ func (n *nodesTable) AddEntry(node *Node, name string) (string, error) {
 }
 
 // Enumerates all the entries in the table. If a file or directory is found in
-// the directory tree that doesn't match the expected format, it will be moved
-// into the trash.
+// the directory tree that doesn't match the expected format, it will
+// automatically be moved into the trash.
 func (n *nodesTable) Enumerate() <-chan NodeEntry {
 	items := make(chan NodeEntry)
 	c := EnumerateTree(n.nodesDir)
@@ -179,6 +179,7 @@ func (n *nodesTable) Enumerate() <-chan NodeEntry {
 					// TODO(maruel): Cancel iterating inside the directory!
 					continue
 				}
+				// TODO(maruel): This shouldn't be done here.
 				node := &Node{}
 				if err := loadFileAsJson(v.FullPath, node); err != nil {
 					n.trash.Move(relPath)

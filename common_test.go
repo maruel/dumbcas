@@ -11,7 +11,10 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path"
@@ -108,4 +111,10 @@ func Sub(a []string, b []string) []string {
 		}
 	}
 	return out
+}
+
+func sha1String(content string) string {
+	hash := sha1.New()
+	io.WriteString(hash, content)
+	return hex.EncodeToString(hash.Sum(nil))
 }

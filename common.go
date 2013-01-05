@@ -185,12 +185,6 @@ func sha1Bytes(content []byte) string {
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
-func sha1String(content string) string {
-	hash := sha1.New()
-	io.WriteString(hash, content)
-	return hex.EncodeToString(hash.Sum(nil))
-}
-
 func loadReaderAsJson(r io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(r)
 	if err == nil {

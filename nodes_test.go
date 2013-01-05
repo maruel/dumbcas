@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -129,6 +130,17 @@ func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
 	return c
 }
 
+// Returns a sorted list of all the entries.
+func EnumerateNodesAsList(t *TB, nodes NodesTable) []string {
+	items := []string{}
+	for v := range nodes.Enumerate() {
+		t.Assertf(v.Error == nil, "Unexpected failure")
+		items = append(items, v.RelPath)
+	}
+	sort.Strings(items)
+	return items
+}
+
 func TestNodesTable(t *testing.T) {
 	t.Parallel()
 	tb := MakeTB(t)
@@ -211,24 +223,16 @@ func archiveData(t *TB, cas CasTable, nodes NodesTable, tree map[string]string) 
 }
 
 func testNodesTableImpl(t *TB, cas CasTable, nodes NodesTable) {
-	for _ = range nodes.Enumerate() {
-		t.Fatal("Found unexpected value")
-	}
+	t.Assertf(len(EnumerateNodesAsList(t, nodes)) == 0, "Found unexpected value")
 
 	tree1 := map[string]string{
 		"file1":           "content1",
 		"dir1/dir2/file2": "content2",
 	}
 	archiveData(t, cas, nodes, tree1)
-	count := 0
-	name := ""
-	for v := range nodes.Enumerate() {
-		count += 1
-		name = v.RelPath
-	}
-	if count != 2 {
-		t.Fatalf("Found %d items", count)
-	}
+	items := EnumerateNodesAsList(t, nodes)
+	t.Assertf(len(items) == 2, "Found items: %q", items)
+	name := items[0]
 
 	body := request(t, nodes, "/", 200, "")
 	t.Assertf(strings.Count(body, "<a ") == 2, "Unexpected output:\n%s", body)

@@ -113,7 +113,7 @@ func (b Buffer) Close() error {
 }
 
 // Returns a sorted list of all the entries.
-func EnumerateAsList(t *TB, cas CasTable) []string {
+func EnumerateCasAsList(t *TB, cas CasTable) []string {
 	items := []string{}
 	for v := range cas.Enumerate() {
 		t.Assertf(v.Error == nil, "Unexpected failure")
@@ -180,13 +180,13 @@ func TestCasTableNode(t *testing.T) {
 }
 
 func testCasTableImpl(t *TB, cas CasTable) {
-	items := EnumerateAsList(t, cas)
+	items := EnumerateCasAsList(t, cas)
 	t.Assertf(len(items) == 0, "Found unexpected values: %q", items)
 
 	file1, err := AddBytes(cas, []byte("content1"))
 	t.Assertf(err == nil, "Unexpected error: %s", err)
 
-	items = EnumerateAsList(t, cas)
+	items = EnumerateCasAsList(t, cas)
 	t.Assertf(Equals(items, []string{file1}), "Found unexpected values: %q != %s", items, file1)
 
 	// Add the same content.
@@ -194,7 +194,7 @@ func testCasTableImpl(t *TB, cas CasTable) {
 	t.Assertf(os.IsExist(err), "Unexpected error: %s", err)
 	t.Assertf(file1 == file2, "Hash mismatch %s != %s", file1, file2)
 
-	items = EnumerateAsList(t, cas)
+	items = EnumerateCasAsList(t, cas)
 	t.Assertf(Equals(items, []string{file1}), "Found unexpected values: %q != %s", items, file1)
 
 	f, err := cas.Open(file1)

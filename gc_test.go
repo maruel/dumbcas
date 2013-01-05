@@ -20,18 +20,33 @@ func TestGc(t *testing.T) {
 	args := []string{"gc", "-root=\\"}
 	f.Run(args, 0)
 
-	items := EnumerateAsList(f.TB, f.cas)
+	items := EnumerateCasAsList(f.TB, f.cas)
 	f.Assertf(len(items) == 0, "Unexpected items: %s", items)
 
 	// Create a tree of stuff.
-	tree1 := map[string]string{
+	tree := map[string]string{
 		"file1":           "content1",
 		"dir1/dir2/file2": "content2",
 	}
-	archiveData(f.TB, f.cas, f.nodes, tree1)
+	archiveData(f.TB, f.cas, f.nodes, tree)
 
 	args = []string{"gc", "-root=\\"}
 	f.Run(args, 0)
-	items = EnumerateAsList(f.TB, f.cas)
-	f.Assertf(len(items) == 3, "Unexpected items: %s", items)
+	items = EnumerateCasAsList(f.TB, f.cas)
+	f.Assertf(len(items) == 3, "Unexpected items: %q", items)
+	n1 := EnumerateNodesAsList(f.TB, f.nodes)
+	f.Assertf(len(n1) == 2, "Unexpected items: %q", n1)
+
+	// Add anothera tree of stuff.
+	tree = map[string]string{
+		"file3":           "content3",
+		"dir1/dir4/file5": "content5",
+	}
+	archiveData(f.TB, f.cas, f.nodes, tree)
+
+	items = EnumerateCasAsList(f.TB, f.cas)
+	f.Assertf(len(items) == 6, "Unexpected items: %s", items)
+	n2 := EnumerateNodesAsList(f.TB, f.nodes)
+	f.Assertf(len(n2) == 3, "Unexpected items: %q", n2)
+	// TODO(maruel): nodes.Remove(n1[0])
 }

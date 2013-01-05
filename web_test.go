@@ -92,7 +92,9 @@ func TestWeb(t *testing.T) {
 	// Sets -root to an invalid non-empty string.
 	run.Root = "\\foo"
 
-	// Create a tree of stuff.
+	// Create a tree of stuff. Call the factory functions directly because we
+	// can't use Run(). The reason Run() can't be used is because we need the
+	// channel to get the socket address back.
 	f.DumbcasAppMock.MakeCasTable("")
 	f.DumbcasAppMock.LoadNodesTable("", f.cas)
 	tree1 := map[string]string{

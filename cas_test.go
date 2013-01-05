@@ -125,18 +125,6 @@ func EnumerateCasAsList(t *TB, cas CasTable) []string {
 	return items
 }
 
-func Equals(a []string, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func TestPrefixSpace(t *testing.T) {
 	t.Parallel()
 	tb := MakeTB(t)

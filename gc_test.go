@@ -10,6 +10,7 @@ limitations under the License. */
 package main
 
 import (
+	"sort"
 	"testing"
 )
 
@@ -17,46 +18,51 @@ func TestGc(t *testing.T) {
 	t.Parallel()
 	f := makeDumbcasAppMock(t)
 
-	args := []string{"gc", "-root=\\"}
-	f.Run(args, 0)
-
-	items := EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(items) == 0, "Unexpected items: %s", items)
+	args := []string{"gc", "-root=\\foo_bar"}
+	{
+		f.Run(args, 0)
+		i := EnumerateCasAsList(f.TB, f.cas)
+		f.Assertf(len(i) == 0, "Unexpected items: %s", i)
+	}
 
 	// Create a tree of stuff.
-	tree := map[string]string{
+	archiveData(f.TB, f.cas, f.nodes, map[string]string{
 		"file1":           "content1",
 		"dir1/dir2/file2": "content2",
-	}
-	archiveData(f.TB, f.cas, f.nodes, tree)
+	})
 
-	args = []string{"gc", "-root=\\"}
 	f.Run(args, 0)
-	items = EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(items) == 3, "Unexpected items: %d", len(items))
+	i1 := EnumerateCasAsList(f.TB, f.cas)
+	f.Assertf(len(i1) == 3, "Unexpected items: %d", len(i1))
 	n1 := EnumerateNodesAsList(f.TB, f.nodes)
-	f.Assertf(len(n1) == 2, "Unexpected items: %q", n1)
+	f.Assertf(len(n1) == 2, "Unexpected nodes: %q", n1)
 
 	// Add anothera tree of stuff.
-	tree = map[string]string{
+	archiveData(f.TB, f.cas, f.nodes, map[string]string{
 		"file3":           "content3",
-		"dir1/dir4/file5": "content5",
-		"dir6/file7":      "content7",
-	}
-	archiveData(f.TB, f.cas, f.nodes, tree)
+		"dir1/dir4/file5": "content4",
+		"dir6/file7":      "content5",
+		"file1a":          "content1",
+	})
 
-	items = EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(items) == 7, "Unexpected items: %d", len(items))
+	i2 := EnumerateCasAsList(f.TB, f.cas)
+	f.Assertf(len(i2) == 7, "Unexpected items: %d", len(i2))
 	n2 := EnumerateNodesAsList(f.TB, f.nodes)
 	f.Assertf(len(n2) == 3, "Unexpected items: %q", n2)
 	err := f.nodes.Remove(n1[0])
 	f.Assertf(err == nil, "Unexpected: %s", err)
 
-	// TODO(maruel): Compare the actual sha1s.
-	args = []string{"gc", "-root=\\"}
 	f.Run(args, 0)
-	items = EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(items) == 4, "Unexpected items: %d", len(items))
+	i3 := EnumerateCasAsList(f.TB, f.cas)
+	f.Assertf(len(i3) == 5, "Unexpected items: %d", len(i3))
 	n3 := EnumerateNodesAsList(f.TB, f.nodes)
 	f.Assertf(len(n3) == 2, "Unexpected items: %q", n3)
+
+	// Check both: "n3 == n2 - n1[0]" and "i3 == i2 - i1 + sha1(content1)"
+	rest := Sub(n2, []string{n1[0]})
+	f.Assertf(Equals(n3, rest), "Unexpected difference: %q != %q", n3, rest)
+	rest = Sub(i2, i1)
+	rest = append(rest, sha1String("content1"))
+	sort.Strings(rest)
+	f.Assertf(Equals(i3, rest), "Unexpected difference: %q != %q", i3, rest)
 }

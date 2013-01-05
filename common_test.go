@@ -74,3 +74,38 @@ func createTree(rootDir string, tree map[string]string) error {
 	}
 	return nil
 }
+
+// Equals verifies equality of two slices. They must be sorted.
+func Equals(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// ToSet converts a string slice to a map of string acting as a set.
+func ToSet(i []string) map[string]bool {
+	out := make(map[string]bool)
+	for _, v := range i {
+		out[v] = true
+	}
+	return out
+}
+
+// Sub substracts list b from list a; e.g. it retuns "a-b".
+// It keeps the a slice ordered.
+func Sub(a []string, b []string) []string {
+	bMap := ToSet(b)
+	out := []string{}
+	for _, v := range a {
+		if !bMap[v] {
+			out = append(out, v)
+		}
+	}
+	return out
+}

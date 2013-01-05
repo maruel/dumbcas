@@ -194,7 +194,7 @@ func archiveData(t *TB, cas CasTable, nodes NodesTable, tree map[string]string) 
 	entries := &Entry{}
 	for k, v := range tree {
 		h, err := AddBytes(cas, []byte(v))
-		t.Assertf(err == nil, "Oops")
+		t.Assertf(err == nil || err == os.ErrExist, "Unexpected error: %s", err)
 		sha1tree[k] = h
 
 		e := entries

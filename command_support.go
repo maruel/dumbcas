@@ -172,7 +172,9 @@ func Run(a Application, args []string) int {
 		// Initialize the flags.
 		r := c.CommandRun()
 		initCommand(a, c, r, a.GetErr(), &helpUsed)
-		r.GetFlags().Parse(args[1:])
+		if err := r.GetFlags().Parse(args[1:]); err != nil {
+			return 2
+		}
 		if helpUsed {
 			return 0
 		}

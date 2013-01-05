@@ -162,9 +162,8 @@ func TestHelpBadFlag(t *testing.T) {
 	}
 	a := MakeAppMock(t, app)
 	args := []string{"help", "-foo"}
-	// TODO(maruel): This is inconsistent.
 	r := Run(a, args)
-	a.Assertf(r == 0, "Unexpected return code %d", r)
+	a.Assertf(r == 2, "Unexpected return code %d", r)
 	a.CheckBuffer(false, true)
 }
 

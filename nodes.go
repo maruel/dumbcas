@@ -48,6 +48,8 @@ type NodesTable interface {
 	AddEntry(node *Node, name string) (string, error)
 	// Enumerates all the entries in the table.
 	Enumerate() <-chan NodeEntry
+	// Removes a node enumerated by Enumerate().
+	Remove(name string) error
 }
 
 type nodesTable struct {
@@ -190,6 +192,11 @@ func (n *nodesTable) Enumerate() <-chan NodeEntry {
 		close(items)
 	}()
 	return items
+}
+
+func (n *nodesTable) Remove(name string) error {
+	// TODO(maruel): Remove empty directories.
+	return n.trash.Move(name)
 }
 
 func LoadEntry(cas CasTable, hash string) (*Entry, error) {

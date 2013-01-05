@@ -33,7 +33,7 @@ func TestGc(t *testing.T) {
 	args = []string{"gc", "-root=\\"}
 	f.Run(args, 0)
 	items = EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(items) == 3, "Unexpected items: %q", items)
+	f.Assertf(len(items) == 3, "Unexpected items: %d", len(items))
 	n1 := EnumerateNodesAsList(f.TB, f.nodes)
 	f.Assertf(len(n1) == 2, "Unexpected items: %q", n1)
 
@@ -41,12 +41,22 @@ func TestGc(t *testing.T) {
 	tree = map[string]string{
 		"file3":           "content3",
 		"dir1/dir4/file5": "content5",
+		"dir6/file7":      "content7",
 	}
 	archiveData(f.TB, f.cas, f.nodes, tree)
 
 	items = EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(items) == 6, "Unexpected items: %s", items)
+	f.Assertf(len(items) == 7, "Unexpected items: %d", len(items))
 	n2 := EnumerateNodesAsList(f.TB, f.nodes)
 	f.Assertf(len(n2) == 3, "Unexpected items: %q", n2)
-	// TODO(maruel): nodes.Remove(n1[0])
+	err := f.nodes.Remove(n1[0])
+	f.Assertf(err == nil, "Unexpected: %s", err)
+
+	// TODO(maruel): Compare the actual sha1s.
+	args = []string{"gc", "-root=\\"}
+	f.Run(args, 0)
+	items = EnumerateCasAsList(f.TB, f.cas)
+	f.Assertf(len(items) == 4, "Unexpected items: %d", len(items))
+	n3 := EnumerateNodesAsList(f.TB, f.nodes)
+	f.Assertf(len(n3) == 2, "Unexpected items: %q", n3)
 }

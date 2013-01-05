@@ -17,6 +17,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -128,6 +129,14 @@ func (m *mockNodesTable) Enumerate() <-chan NodeEntry {
 		close(c)
 	}()
 	return c
+}
+
+func (m *mockNodesTable) Remove(name string) error {
+	if _, ok := m.entries[name]; !ok {
+		return os.ErrNotExist
+	}
+	delete(m.entries, name)
+	return nil
 }
 
 // Returns a sorted list of all the entries.

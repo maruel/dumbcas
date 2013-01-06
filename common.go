@@ -57,7 +57,7 @@ func (c *CommonFlags) Init() {
 	c.Flags.StringVar(&c.Root, "root", os.Getenv("DUMBCAS_ROOT"), "Root directory; required. Set $DUMBCAS_ROOT to set a default.")
 }
 
-func (c *CommonFlags) Parse(d DumbcasApplication, createRoot bool, bypassFsck bool) error {
+func (c *CommonFlags) Parse(d DumbcasApplication, bypassFsck bool) error {
 	if c.Root == "" {
 		return errors.New("Must provide -root")
 	}
@@ -65,12 +65,6 @@ func (c *CommonFlags) Parse(d DumbcasApplication, createRoot bool, bypassFsck bo
 		return fmt.Errorf("Failed to find %s", c.Root)
 	} else {
 		c.Root = root
-	}
-
-	if createRoot {
-		if err := os.MkdirAll(c.Root, 0750); err != nil && !os.IsExist(err) {
-			return fmt.Errorf("Failed to create %s: %s", c.Root, err)
-		}
 	}
 
 	if cas, err := d.MakeCasTable(c.Root); err != nil {

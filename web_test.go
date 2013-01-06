@@ -90,7 +90,7 @@ func TestWeb(t *testing.T) {
 	f.Assertf(cmd != nil, "Failed to find 'web'")
 	run := cmd.CommandRun().(*webRun)
 	// Sets -root to an invalid non-empty string.
-	run.Root = "\\foo"
+	run.Root = "\\test_web"
 
 	// Create a tree of stuff. Call the factory functions directly because we
 	// can't use Run(). The reason Run() can't be used is because we need the

@@ -100,7 +100,7 @@ func localRedirect(w http.ResponseWriter, r *http.Request, newPath string) {
 }
 
 func (c *webRun) main(d DumbcasApplication, ready chan<- net.Listener) error {
-	if err := c.Parse(d, false, true); err != nil {
+	if err := c.Parse(d, true); err != nil {
 		return err
 	}
 

@@ -38,7 +38,7 @@ func TagRecurse(entries map[string]bool, entry *Entry) {
 }
 
 func (c *gcRun) main(a DumbcasApplication) error {
-	if err := c.Parse(a, false, false); err != nil {
+	if err := c.Parse(a, false); err != nil {
 		return err
 	}
 

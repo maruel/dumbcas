@@ -17,7 +17,7 @@ import (
 func TestGcEmpty(t *testing.T) {
 	t.Parallel()
 	f := makeDumbcasAppMock(t)
-	args := []string{"gc", "-root=\\foo_bar"}
+	args := []string{"gc", "-root=\\test_gc_empty"}
 	f.Run(args, 0)
 	i := EnumerateCasAsList(f.TB, f.cas)
 	f.Assertf(len(i) == 0, "Unexpected items: %s", i)
@@ -26,7 +26,7 @@ func TestGcEmpty(t *testing.T) {
 func TestGcKept(t *testing.T) {
 	t.Parallel()
 	f := makeDumbcasAppMock(t)
-	args := []string{"gc", "-root=\\foo_bar"}
+	args := []string{"gc", "-root=\\test_gc_kept"}
 	f.Run(args, 0) // Instantiate f.cas and f.nodes
 
 	// Create a tree of stuff.
@@ -52,7 +52,7 @@ func TestGcKept(t *testing.T) {
 func TestGcTrim(t *testing.T) {
 	t.Parallel()
 	f := makeDumbcasAppMock(t)
-	args := []string{"gc", "-root=\\foo_bar"}
+	args := []string{"gc", "-root=\\test_gc_trim"}
 	f.Run(args, 0) // Instantiate f.cas and f.nodes
 
 	// Create a tree of stuff.

@@ -268,7 +268,7 @@ func cleanupList(relDir string, inputs []string) {
 }
 
 func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
-	if err := c.Parse(a, true, true); err != nil {
+	if err := c.Parse(a, true); err != nil {
 		return err
 	}
 

@@ -16,7 +16,7 @@ import (
 func TestFsckEmpty(t *testing.T) {
 	t.Parallel()
 	f := makeDumbcasAppMock(t)
-	args := []string{"fsck", "-root=\\foo_bar"}
+	args := []string{"fsck", "-root=\\test_fsck_empty"}
 	f.Run(args, 0)
 	items := EnumerateCasAsList(f.TB, f.cas)
 	f.Assertf(len(items) == 0, "Unexpected items: %s", items)
@@ -27,7 +27,7 @@ func TestFsckEmpty(t *testing.T) {
 func TestFsckCorruptCasFile(t *testing.T) {
 	t.Parallel()
 	f := makeDumbcasAppMock(t)
-	args := []string{"fsck", "-root=\\foo_bar"}
+	args := []string{"fsck", "-root=\\test_fsck_cas"}
 	f.Run(args, 0)
 
 	archiveData(f.TB, f.cas, f.nodes, map[string]string{
@@ -55,7 +55,7 @@ func TestFsckCorruptCasFile(t *testing.T) {
 func TestFsckCorruptNodeEntry(t *testing.T) {
 	t.Parallel()
 	f := makeDumbcasAppMock(t)
-	args := []string{"fsck", "-root=\\foo_bar"}
+	args := []string{"fsck", "-root=\\test_fsck_corrupt"}
 	f.Run(args, 0)
 
 	// Create a tree of stuff.

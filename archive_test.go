@@ -10,7 +10,6 @@ limitations under the License. */
 package main
 
 import (
-	"log"
 	"path"
 	"sort"
 	"testing"
@@ -33,8 +32,7 @@ func TestArchive(t *testing.T) {
 		f.Fatal(err)
 	}
 
-	log.Print("T: Archive.")
-	args := []string{"archive", "-root=\\foo_bar", path.Join(tempData, "toArchive")}
+	args := []string{"archive", "-root=\\test_archive", path.Join(tempData, "toArchive")}
 	f.Run(args, 0)
 	f.CheckBuffer(true, false)
 	items := EnumerateCasAsList(f.TB, f.cas)
@@ -46,6 +44,7 @@ func TestArchive(t *testing.T) {
 	}
 	expected = append(expected, sha1Bytes(entries))
 	sort.Strings(expected)
+	// TODO(maruel): Currently commented out because json.Marshal() is not deterministic.
 	//f.Assertf(Equals(items, expected), "Unexpected items:\n%s\n%s", items, expected)
 
 	nodes := EnumerateNodesAsList(f.TB, f.nodes)

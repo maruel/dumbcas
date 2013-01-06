@@ -30,7 +30,7 @@ type fsckRun struct {
 }
 
 func (c *fsckRun) main(a DumbcasApplication) error {
-	if err := c.Parse(a, false, true); err != nil {
+	if err := c.Parse(a, true); err != nil {
 		return err
 	}
 

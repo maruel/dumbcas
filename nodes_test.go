@@ -206,17 +206,13 @@ func request(t *TB, nodes NodesTable, path string, expectedCode int, expectedBod
 	return body
 }
 
-// Archives a tree fictious data.
-// Returns (tree of sha1s, name of the node, sha1 of the node entry).
-// Accept the paths as posix.
-func archiveData(t *TB, cas CasTable, nodes NodesTable, tree map[string]string) (map[string]string, string, string) {
+// Returns the tree of sha1s and the json encoded Node as bytes.
+func marshalData(t *TB, tree map[string]string) (map[string]string, []byte) {
 	sha1tree := map[string]string{}
 	entries := &Entry{}
 	for k, v := range tree {
-		h, err := AddBytes(cas, []byte(v))
-		t.Assertf(err == nil || err == os.ErrExist, "Unexpected error: %s", err)
+		h := sha1Bytes([]byte(v))
 		sha1tree[k] = h
-
 		e := entries
 		parts := strings.Split(k, "/")
 		for i := 0; i < len(parts)-1; i++ {
@@ -240,7 +236,19 @@ func archiveData(t *TB, cas CasTable, nodes NodesTable, tree map[string]string) 
 	// Then process entries itself.
 	data, err := json.Marshal(entries)
 	t.Assertf(err == nil, "Oops")
-	entrySha1, err := AddBytes(cas, data)
+	return sha1tree, data
+}
+
+// Archives a tree fictious data.
+// Returns (tree of sha1s, name of the node, sha1 of the node entry).
+// Accept the paths as posix.
+func archiveData(t *TB, cas CasTable, nodes NodesTable, tree map[string]string) (map[string]string, string, string) {
+	sha1tree, entries := marshalData(t, tree)
+	for k, v := range tree {
+		err := cas.AddEntry(bytes.NewBuffer([]byte(v)), sha1tree[k])
+		t.Assertf(err == nil || err == os.ErrExist, "Unexpected error: %s", err)
+	}
+	entrySha1, err := AddBytes(cas, entries)
 	t.Assertf(err == nil, "Oops")
 
 	// And finally add the node.

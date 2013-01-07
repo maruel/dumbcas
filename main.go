@@ -45,7 +45,7 @@ func (d *dumbapp) GetLog() *log.Logger {
 }
 
 func (d *dumbapp) LoadCache() (Cache, error) {
-	return loadCache()
+	return loadCache(d.log)
 }
 
 func (d *dumbapp) MakeCasTable(rootDir string) (CasTable, error) {

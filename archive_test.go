@@ -28,6 +28,12 @@ func TestArchive(t *testing.T) {
 		"dir1/bar":           "bar\n",
 		"dir1/dir2/dir3/foo": "foo\n",
 	}
+	archived := map[string]string{
+		"toArchive":     "x\ndir1\n",
+		"x":             "x\n",
+		"bar":           "bar\n",
+		"dir2/dir3/foo": "foo\n",
+	}
 	if err := createTree(tempData, tree); err != nil {
 		f.Fatal(err)
 	}
@@ -38,14 +44,13 @@ func TestArchive(t *testing.T) {
 	items := EnumerateCasAsList(f.TB, f.cas)
 
 	expected := make([]string, 0, len(items))
-	sha1tree, entries := marshalData(f.TB, tree)
+	sha1tree, entries := marshalData(f.TB, archived)
 	for _, v := range sha1tree {
 		expected = append(expected, v)
 	}
 	expected = append(expected, sha1Bytes(entries))
 	sort.Strings(expected)
-	// TODO(maruel): Currently commented out because json.Marshal() is not deterministic.
-	//f.Assertf(Equals(items, expected), "Unexpected items:\n%s\n%s", items, expected)
+	f.Assertf(Equals(items, expected), "Unexpected items:\n%s\n%s", items, expected)
 
 	nodes := EnumerateNodesAsList(f.TB, f.nodes)
 	f.Assertf(len(nodes) == 2, "Unexpected nodes: %s", nodes)

@@ -69,6 +69,7 @@ func (e *EntryCache) CountMembers() int {
 type cache struct {
 	root *EntryCache
 	f    *os.File
+	log  *log.Logger
 }
 
 type Cache interface {
@@ -110,16 +111,16 @@ func getCachePath() (string, error) {
 //
 // TODO(maruel): Ensure proper file locking. One way is to always create a new
 // file when adding data and then periodically garbage-collect the files.
-func loadCache() (Cache, error) {
+func loadCache(l *log.Logger) (Cache, error) {
 	cacheDir, err := getCachePath()
 	if err != nil {
-		return &cache{&EntryCache{}, nil}, err
+		return &cache{&EntryCache{}, nil, l}, err
 	}
-	return loadCacheInner(cacheDir)
+	return loadCacheInner(cacheDir, l)
 }
 
-func loadCacheInner(cacheDir string) (Cache, error) {
-	cache := &cache{&EntryCache{}, nil}
+func loadCacheInner(cacheDir string, l *log.Logger) (Cache, error) {
+	cache := &cache{&EntryCache{}, nil, l}
 	if err := os.Mkdir(cacheDir, 0700); err != nil && !os.IsExist(err) {
 		return cache, fmt.Errorf("Failed to access %s: %s", cacheDir, err)
 	}
@@ -145,7 +146,7 @@ func loadCacheInner(cacheDir string) (Cache, error) {
 		f.Close()
 		return cache, fmt.Errorf("Failed to seek %s: %s", cacheFile, err)
 	}
-	log.Printf("Loaded %d entries from the cache.", cache.root.CountMembers()-1)
+	cache.log.Printf("Loaded %d entries from the cache.", cache.root.CountMembers()-1)
 	cache.f = f
 	return cache, nil
 }
@@ -171,14 +172,14 @@ func (c *cache) Close() {
 			delete(c.root.Files, relFile)
 		}
 	}
-	log.Printf("Saving Cache: %d entries.", c.root.CountMembers()-1)
+	c.log.Printf("Saving Cache: %d entries.", c.root.CountMembers()-1)
 	if err := c.f.Truncate(0); err != nil {
-		log.Printf("Failed to truncate %s: %s", c.f.Name(), err)
+		c.log.Printf("Failed to truncate %s: %s", c.f.Name(), err)
 		return
 	}
 	e := gob.NewEncoder(c.f)
 	if err := e.Encode(c.root); err != nil {
-		log.Printf("Failed to write %s: %s", c.f.Name(), err)
+		c.log.Printf("Failed to write %s: %s", c.f.Name(), err)
 		return
 	}
 }

@@ -48,7 +48,7 @@ func (a *DumbcasAppMock) LoadCache() (Cache, error) {
 func TestCacheNormal(t *testing.T) {
 	t.Parallel()
 	tb := MakeTB(t)
-	cache, err := loadCache()
+	cache, err := loadCache(tb.log)
 	tb.Assertf(err == nil, "Oops")
 	defer cache.Close()
 	tb.Assertf(cache.Root() != nil, "Oops")
@@ -68,7 +68,7 @@ func TestCacheRedirected(t *testing.T) {
 	tempData := makeTempDir(tb, "cache")
 	defer removeTempDir(tempData)
 	load := func() (Cache, error) {
-		return loadCacheInner(tempData)
+		return loadCacheInner(tempData, tb.log)
 	}
 	testCacheImpl(tb, load)
 }

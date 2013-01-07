@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -103,6 +102,7 @@ func (s *syncInt) Get() int64 {
 // Stores statistic of the on-going process.
 type Stats struct {
 	errors           syncInt
+	interrupted      syncInt
 	found            syncInt // enumerateInputs()
 	totalSize        syncInt
 	nbHashed         syncInt // hashInputs()
@@ -113,7 +113,7 @@ type Stats struct {
 	bytesArchived    syncInt
 	nbNotArchived    syncInt
 	bytesNotArchived syncInt
-	log              *log.Logger
+	out              chan<- string
 }
 
 type inputItem struct {
@@ -137,34 +137,40 @@ func (s *Stats) enumerateInputs(inputs []string) <-chan inputItem {
 			if err != nil {
 				// Eat the error and continue archiving other items.
 				s.errors.Add(1)
-				s.log.Printf("Failed to process %s: %s. ", input, err)
+				s.out <- fmt.Sprintf("Failed to process %s: %s", input, err)
 				continue
 			}
 			if stat.IsDir() {
 				// Send the items back in the channel.
 				d := EnumerateTree(input)
-				select {
-				case <-InterruptedChannel:
-					// Early exit. Note this as an error.
-					s.errors.Add(1)
-					close(c)
-					return
-				case item, ok := <-d:
-					if !ok {
-						// Move on the next item.
-						continue
-					}
-					if item.Error != nil {
-						// Eat the error and continue archiving other items.
-						s.errors.Add(1)
-						s.log.Printf("Failed to process %s: %s. ", input, err)
-					} else if !item.FileInfo.IsDir() {
-						// Ignores directories. This tool is backing up content, not
-						// directories.
-						s.found.Add(1)
-						// TODO(maruel): Not necessarily true?
-						relPath := item.FullPath[len(input)+1:]
-						c <- inputItem{item.FullPath, relPath, item.FileInfo}
+				cont := true
+				for cont {
+					select {
+					case <-InterruptedChannel:
+						// Early exit.
+						s.interrupted.Add(1)
+						close(c)
+						return
+					case item, ok := <-d:
+						if !ok {
+							// Move on the next item.
+							cont = false
+							continue
+						}
+						if item.Error != nil {
+							// Eat the error and continue archiving other items.
+							s.errors.Add(1)
+							s.out <- fmt.Sprintf("Failed to process %s: %s", input, err)
+						} else if !item.IsDir() {
+							// Ignores directories. This tool is backing up content, not
+							// directories.
+							s.found.Add(1)
+							s.totalSize.Add(item.Size())
+							// TODO(maruel): Not necessarily true?
+							relPath := item.FullPath[len(input)+1:]
+							//s.out <- fmt.Sprintf("%s: %d", relPath, item.Size())
+							c <- inputItem{item.FullPath, relPath, item.FileInfo}
+						}
 					}
 				}
 			} else {
@@ -174,7 +180,7 @@ func (s *Stats) enumerateInputs(inputs []string) <-chan inputItem {
 				c <- inputItem{input, relPath, stat}
 			}
 		}
-		s.log.Printf("Done enumerating inputs. ")
+		s.out <- fmt.Sprintf("Done enumerating inputs.")
 		close(c)
 	}()
 	return c
@@ -194,19 +200,19 @@ func (s *Stats) hashInputs(a DumbcasApplication, inputs <-chan inputItem) <-chan
 		// LoadCache must return a valid Cache instance even in case of failure.
 		cache, err := a.LoadCache()
 		if err != nil {
-			s.log.Printf("Failed to load cache: %s\nWARNING: It will be unbearably slow.", err)
+			s.out <- fmt.Sprintf("Failed to load cache: %s\nWARNING: It will be unbearably slow!", err)
 		}
 		defer cache.Close()
 		for {
 			select {
 			case <-InterruptedChannel:
-				// Early exit. Note this as an error.
-				s.errors.Add(1)
+				// Early exit.
+				s.interrupted.Add(1)
 				close(c)
 				return
 			case item, ok := <-inputs:
 				if !ok {
-					s.log.Printf("Done hashing. ")
+					s.out <- fmt.Sprintf("Done hashing.")
 					close(c)
 					return
 				}
@@ -218,10 +224,10 @@ func (s *Stats) hashInputs(a DumbcasApplication, inputs <-chan inputItem) <-chan
 				if wasHashed, err := updateFile(cachedItem, item); err != nil {
 					// Eat the error and continue archiving other items.
 					s.errors.Add(1)
-					s.log.Printf("Failed to process %s: %s. ", item.fullPath, err)
+					s.out <- fmt.Sprintf("Failed to process %s: %s", item.fullPath, err)
 					continue
 				} else if wasHashed {
-					//s.log.Printf("Hashed: %s. ", item.relPath)
+					//s.out <- fmt.Sprintf("Hashed: %s", item.relPath)
 					s.nbHashed.Add(1)
 					s.bytesHashed.Add(size)
 				} else {
@@ -240,7 +246,7 @@ func (s *Stats) archiveItem(item itemToArchive, cas CasTable) {
 	f, err := os.Open(item.fullPath)
 	if err != nil {
 		s.errors.Add(1)
-		s.log.Printf("Failed to archive %s: %s. ", item.fullPath, err)
+		s.out <- fmt.Sprintf("Failed to archive %s: %s", item.fullPath, err)
 		return
 	}
 	defer f.Close()
@@ -253,7 +259,7 @@ func (s *Stats) archiveItem(item itemToArchive, cas CasTable) {
 		s.bytesArchived.Add(item.size)
 	} else {
 		s.errors.Add(1)
-		s.log.Printf("Failed to archive %s: %s. ", item.fullPath, err)
+		s.out <- fmt.Sprintf("Failed to archive %s: %s", item.fullPath, err)
 	}
 }
 
@@ -281,8 +287,8 @@ func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan i
 		for cont {
 			select {
 			case <-InterruptedChannel:
-				// Early exit. Note this as an error.
-				s.errors.Add(1)
+				// Early exit.
+				s.interrupted.Add(1)
 				close(c)
 				return
 			case item, ok := <-items:
@@ -290,7 +296,7 @@ func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan i
 					cont = false
 					continue
 				}
-				//s.log.Printf("Archiving: %s. ", item.relPath)
+				//s.out <- fmt.Sprintf("Archiving: %s", item.relPath)
 				makeEntry(entryRoot, item)
 				s.archiveItem(item, cas)
 			}
@@ -299,7 +305,7 @@ func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan i
 		data, err := json.Marshal(entryRoot)
 		if err != nil {
 			s.errors.Add(1)
-			s.log.Printf("Failed to marshal entry file: %s. ", err)
+			s.out <- fmt.Sprintf("Failed to marshal entry file: %s", err)
 			c <- ""
 		} else {
 			entrySha1, err := AddBytes(cas, data)
@@ -313,7 +319,7 @@ func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan i
 				c <- entrySha1
 			} else {
 				s.errors.Add(1)
-				s.log.Printf("Failed to archive entry file: %s. ", err)
+				s.out <- fmt.Sprintf("Failed to archive entry file: %s", err)
 				c <- ""
 			}
 		}
@@ -362,13 +368,16 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 	cleanupList(path.Dir(toArchive), inputs)
 
 	// Start the processes.
-	s := Stats{log: a.GetLog()}
+	output := make(chan string)
+	s := Stats{out: output}
 	items_to_scan := s.enumerateInputs(inputs)
 	items_hashed := s.hashInputs(a, items_to_scan)
 	entry := s.archiveInputs(a, c.cas, items_hashed)
 
 	for {
 		select {
+		case line := <-output:
+			a.GetLog().Print(line)
 		case <-InterruptedChannel:
 			// Early exit. Note this as an error.
 			return fmt.Errorf("Was interrupted.")
@@ -377,8 +386,10 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 				e := s.errors.Get()
 				if e != 0 {
 					return fmt.Errorf("Got %d errors!", e)
+				} else if s.interrupted.Get() != 0 {
+					return fmt.Errorf("Was interrupted.")
 				} else {
-					return fmt.Errorf("Was likely interrupted.")
+					return fmt.Errorf("Unexpected error.")
 				}
 			}
 			if item != "" {
@@ -386,7 +397,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 				_, err = c.nodes.AddEntry(node, path.Base(toArchive))
 				fmt.Fprintf(
 					a.GetOut(),
-					"%d(%1.1fmb) %d(%1.1fmb) hashed %d(%1.1fmb) in cache %d(%1.1fmb) archived  %d(%1.1fmb) skipped %d errors\n",
+					"%d(%1.1fmb)found %d(%1.1fmb)hashed %d(%1.1fmb)in cache %d(%1.1fmb)archived  %d(%1.1fmb)skipped %d errors\n",
 					s.found.Get(),
 					toMb(s.totalSize.Get()),
 					s.nbHashed.Get(),
@@ -403,14 +414,16 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 				e := s.errors.Get()
 				if e != 0 {
 					return fmt.Errorf("Got %d errors!", e)
+				} else if s.interrupted.Get() != 0 {
+					return fmt.Errorf("Was interrupted.")
 				} else {
 					return fmt.Errorf("Unexpected error.")
 				}
 			}
-		case <-time.After(5 * time.Second):
+		case <-time.After(time.Second):
 			fmt.Fprintf(
 				a.GetOut(),
-				"%d(%1.1fmb) %d(%1.1fmb) hashed %d(%1.1fmb) in cache %d(%1.1fmb) archived  %d(%1.1fmb) skipped %d errors\r",
+				"%d(%1.1fmb)found %d(%1.1fmb)hashed %d(%1.1fmb)in cache %d(%1.1fmb)archived  %d(%1.1fmb)skipped %d errors\r",
 				s.found.Get(),
 				toMb(s.totalSize.Get()),
 				s.nbHashed.Get(),

@@ -29,6 +29,7 @@ var application = &DefaultApplication{
 type DumbcasApplication interface {
 	Application
 	GetLog() *log.Logger
+	// LoadCache must return a valid Cache instance even in case of failure.
 	LoadCache() (Cache, error)
 	MakeCasTable(rootDir string) (CasTable, error)
 	LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error)

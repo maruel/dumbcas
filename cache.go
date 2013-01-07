@@ -17,7 +17,9 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -25,6 +27,8 @@ func init() {
 	gob.Register(&EntryCache{})
 }
 
+// Describe an entry in the cache. Can be either a file or a directory. Using
+// this structure is more compact than a flat list for deep trees.
 type EntryCache struct {
 	Sha1       string
 	Size       int64
@@ -68,9 +72,28 @@ type cache struct {
 }
 
 type Cache interface {
+	// Returns the root entry. Must be non-nil.
 	Root() *EntryCache
 	// Closes (and save) the cache.
 	Close()
+}
+
+// Finds an item in the cache or create it if not present.
+func FindInCache(c Cache, itemPath string) *EntryCache {
+	if filepath.Separator == '/' && itemPath[0] == '/' {
+		itemPath = itemPath[1:]
+	}
+	entry := c.Root()
+	for _, p := range strings.Split(itemPath, string(filepath.Separator)) {
+		if entry.Files == nil {
+			entry.Files = make(map[string]*EntryCache)
+		}
+		if entry.Files[p] == nil {
+			entry.Files[p] = &EntryCache{}
+		}
+		entry = entry.Files[p]
+	}
+	return entry
 }
 
 func getCachePath() (string, error) {
@@ -82,26 +105,28 @@ func getCachePath() (string, error) {
 }
 
 // Loads the cache from ~/.dumbcas/cache.json and keeps it open until the call
-// to Save().
+// to Save(). It is guaranteed to return a non-nil Cache instance even in case
+// of failure to load the cache from disk and that error is non-nil.
+//
 // TODO(maruel): Ensure proper file locking. One way is to always create a new
 // file when adding data and then periodically garbage-collect the files.
 func loadCache() (Cache, error) {
 	cacheDir, err := getCachePath()
 	if err != nil {
-		return nil, err
+		return &cache{&EntryCache{}, nil}, err
 	}
 	return loadCacheInner(cacheDir)
 }
 
 func loadCacheInner(cacheDir string) (Cache, error) {
+	cache := &cache{&EntryCache{}, nil}
 	if err := os.Mkdir(cacheDir, 0700); err != nil && !os.IsExist(err) {
-		return nil, fmt.Errorf("Failed to access %s: %s", cacheDir, err)
+		return cache, fmt.Errorf("Failed to access %s: %s", cacheDir, err)
 	}
-	root := &EntryCache{}
 	cacheFile := path.Join(cacheDir, "cache.gob")
 	f, err := os.OpenFile(cacheFile, os.O_CREATE|os.O_RDWR, 0600)
 	if f == nil {
-		return nil, fmt.Errorf("Failed to access %s: %s", cacheFile, err)
+		return cache, fmt.Errorf("Failed to access %s: %s", cacheFile, err)
 	}
 
 	// The cache uses gob instead of json because:
@@ -112,15 +137,17 @@ func loadCacheInner(cacheDir string) (Cache, error) {
 	// - The program works fine without cache so it's not a big deal if it ever
 	//   become backward incomatible.
 	d := gob.NewDecoder(f)
-	if err := d.Decode(&root); err != nil {
-		// Ignore unmarshaling failure.
-		root = &EntryCache{}
+	if err := d.Decode(cache.root); err != nil {
+		// Ignore unmarshaling failure by reseting the content.
+		cache.root = &EntryCache{}
 	}
 	if _, err = f.Seek(0, 0); err != nil {
-		return nil, fmt.Errorf("Failed to seek %s: %s", cacheFile, err)
+		f.Close()
+		return cache, fmt.Errorf("Failed to seek %s: %s", cacheFile, err)
 	}
-	log.Printf("Loaded %d entries from the cache.", root.CountMembers()-1)
-	return &cache{root, f}, nil
+	log.Printf("Loaded %d entries from the cache.", cache.root.CountMembers()-1)
+	cache.f = f
+	return cache, nil
 }
 
 func (c *cache) Root() *EntryCache {
@@ -128,6 +155,10 @@ func (c *cache) Root() *EntryCache {
 }
 
 func (c *cache) Close() {
+	if c.f == nil {
+		return
+	}
+
 	defer func() {
 		c.f.Close()
 		c.f = nil

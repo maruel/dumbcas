@@ -12,13 +12,14 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,62 +40,29 @@ type archiveRun struct {
 	comment string
 }
 
-// Traverse synchronously both the cache and the entry table.
-func Recurse(cache *EntryCache, entry *Entry, item string) (*EntryCache, *Entry) {
-	cache.LastTested = time.Now().UTC().Unix()
-	if cache.Files == nil {
-		cache.Files = map[string]*EntryCache{}
-	}
-	if entry.Files == nil {
-		entry.Files = map[string]*Entry{}
-	}
-	if _, ok := cache.Files[item]; !ok {
-		cache.Files[item] = &EntryCache{}
-	}
-	if _, ok := entry.Files[item]; !ok {
-		entry.Files[item] = &Entry{}
-	}
-	return cache.Files[item], entry.Files[item]
-}
-
-// Creates the tree of EntryCache and Entry based on itemPath.
-func RecursePath(cache *EntryCache, entry *Entry, itemPath string) (*EntryCache, *Entry) {
-	if filepath.Separator == '/' && itemPath[0] == '/' {
-		itemPath = itemPath[1:]
-	}
-	parts := strings.SplitN(itemPath, string(filepath.Separator), 2)
-	cache, entry = Recurse(cache, entry, parts[0])
-	if len(parts) == 2 && parts[1] != "" {
-		cache, entry = RecursePath(cache, entry, parts[1])
-	}
-	return cache, entry
-}
-
-func UpdateFile(cache *EntryCache, entry *Entry, item TreeItem) error {
+// For an item, tries to refresh its sha1 efficiently.
+func updateFile(cache *EntryCache, item inputItem) (bool, error) {
 	now := time.Now().Unix()
-	size := item.FileInfo.Size()
-	timestamp := item.FileInfo.ModTime().Unix()
+	size := item.Size()
+	timestamp := item.ModTime().Unix()
 	// If the file already exist, check for the timestamp and size to match.
 	if cache.Size == size && cache.Timestamp == timestamp {
-		entry.Sha1 = cache.Sha1
-		entry.Size = size
 		cache.LastTested = now
-		return nil
+		return false, nil
 	}
 
-	digest, err := sha1FilePath(item.FullPath)
+	digest, err := sha1FilePath(item.fullPath)
 	if err != nil {
-		return err
+		return false, err
 	}
 	cache.Sha1 = digest
 	cache.Size = size
 	cache.Timestamp = timestamp
 	cache.LastTested = now
-	entry.Sha1 = digest
-	entry.Size = size
-	return nil
+	return true, nil
 }
 
+// Reads a file with each line as an entry in the slice.
 func readFileAsStrings(filepath string) ([]string, error) {
 	f, err := os.Open(filepath)
 	if err != nil {
@@ -120,142 +88,241 @@ func readFileAsStrings(filepath string) ([]string, error) {
 	return lines, err
 }
 
-// Calculates each entry. Assumes inputs is cleaned paths.
-func processWithCache(a DumbcasApplication, inputs []string) (*Entry, error) {
-	a.GetLog().Printf("processWithCache(%d)", len(inputs))
-	cache, err := a.LoadCache()
-	if err != nil {
-		return nil, err
-	}
-	defer cache.Close()
+// Statistics are used with atomic functions. While not Go-idiomatic, it's much
+// faster.
+type syncInt int64
 
-	entryRoot := &Entry{}
-	// Throtttle after 128k entries per input.
-	channels := make([]<-chan TreeItem, len(inputs))
-	for i, input := range inputs {
-		stat, err := os.Stat(input)
-		if err != nil {
-			// TODO(maruel): Leaks the channels and the go routines.
-			return nil, err
-		}
-		if stat.IsDir() {
-			channels[i] = EnumerateTree(input)
-		} else {
-			c := make(chan TreeItem, 1)
-			channels[i] = c
-			c <- TreeItem{FullPath: input, FileInfo: stat}
-			close(c)
-		}
-	}
-	count := 0
-	size := int64(0)
-	for _, c := range channels {
-		for {
-			if IsInterrupted() {
-				break
-			}
-			item, ok := <-c
-			if !ok {
-				break
-			}
-			if item.Error != nil {
-				// TODO(maruel): Leaks.
-				return nil, item.Error
-			}
-			if item.FileInfo.IsDir() {
+func (s *syncInt) Add(i int64) {
+	atomic.AddInt64((*int64)(s), i)
+}
+
+func (s *syncInt) Get() int64 {
+	return atomic.LoadInt64((*int64)(s))
+}
+
+// Stores statistic of the on-going process.
+type Stats struct {
+	errors           syncInt
+	found            syncInt // enumerateInputs()
+	totalSize        syncInt
+	nbHashed         syncInt // hashInputs()
+	bytesHashed      syncInt
+	nbNotHashed      syncInt
+	bytesNotHashed   syncInt
+	nbArchived       syncInt // archiveInputs()
+	bytesArchived    syncInt
+	nbNotArchived    syncInt
+	bytesNotArchived syncInt
+	log              *log.Logger
+}
+
+type inputItem struct {
+	fullPath string
+	relPath  string
+	os.FileInfo
+}
+
+// enumerateInputs reads the directories trees of each inputs and send each
+// file into the output channel.
+func (s *Stats) enumerateInputs(inputs []string) <-chan inputItem {
+	// Throtttle after 128k entries.
+	c := make(chan inputItem, 128000)
+	go func() {
+		// Do each entry serially. In theory there would be marginal gain by doing
+		// them concurrently if the inputs are on different drives but for the
+		// common use case where it's multiple directories on a single disk-based
+		// HD, it's going to be slower.
+		for _, input := range inputs {
+			stat, err := os.Stat(input)
+			if err != nil {
+				// Eat the error and continue archiving other items.
+				s.errors.Add(1)
+				s.log.Printf("Failed to process %s: %s. ", input, err)
 				continue
 			}
-			display := item.FullPath
-			if len(display) > 50 {
-				display = "..." + display[len(display)-50:]
+			if stat.IsDir() {
+				// Send the items back in the channel.
+				d := EnumerateTree(input)
+				select {
+				case <-InterruptedChannel:
+					// Early exit. Note this as an error.
+					s.errors.Add(1)
+					close(c)
+					return
+				case item, ok := <-d:
+					if !ok {
+						// Move on the next item.
+						continue
+					}
+					if item.Error != nil {
+						// Eat the error and continue archiving other items.
+						s.errors.Add(1)
+						s.log.Printf("Failed to process %s: %s. ", input, err)
+					} else if !item.FileInfo.IsDir() {
+						// Ignores directories. This tool is backing up content, not
+						// directories.
+						s.found.Add(1)
+						// TODO(maruel): Not necessarily true?
+						relPath := item.FullPath[len(input)+1:]
+						c <- inputItem{item.FullPath, relPath, item.FileInfo}
+					}
+				}
+			} else {
+				s.found.Add(1)
+				s.totalSize.Add(stat.Size())
+				relPath := path.Base(input)
+				c <- inputItem{input, relPath, stat}
 			}
-			fmt.Fprintf(a.GetOut(), "%d files %1.1fmb Hashing %s...    \r", count, float64(size)/1024./1024., display)
-			cacheKey, key := RecursePath(cache.Root(), entryRoot, item.FullPath)
-			if err = UpdateFile(cacheKey, key, item); err != nil {
-				return nil, err
-			}
-			count += 1
-			size += item.FileInfo.Size()
 		}
-	}
-	fmt.Fprintf(a.GetOut(), "\n")
-	if IsInterrupted() {
-		return nil, errors.New("Ctrl-C'ed out")
-	}
-	return entryRoot, nil
+		s.log.Printf("Done enumerating inputs. ")
+		close(c)
+	}()
+	return c
 }
 
-type Stats struct {
-	nbArchived int
-	archived   int64
-	nbSkipped  int
-	skipped    int64
-	stdout     io.Writer
+type itemToArchive struct {
+	fullPath string
+	relPath  string
+	sha1     string
+	size     int64
 }
 
-func (s *Stats) recurseTree(itemPath string, entry *Entry, cas CasTable) error {
-	if IsInterrupted() {
-		return errors.New("Ctrl-C'ed out")
-	}
-	for relPath, file := range entry.Files {
-		if err := s.recurseTree(path.Join(itemPath, relPath), file, cas); err != nil {
-			return err
-		}
-	}
-	if entry.Sha1 != "" {
-		f, err := os.Open(itemPath)
+// Calculates each entry. Assumes inputs is cleaned paths.
+func (s *Stats) hashInputs(a DumbcasApplication, inputs <-chan inputItem) <-chan itemToArchive {
+	c := make(chan itemToArchive, 4096)
+	go func() {
+		// LoadCache must return a valid Cache instance even in case of failure.
+		cache, err := a.LoadCache()
 		if err != nil {
-			return nil
+			s.log.Printf("Failed to load cache: %s\nWARNING: It will be unbearably slow.", err)
 		}
-		defer f.Close()
-		err = cas.AddEntry(f, entry.Sha1)
-		if os.IsExist(err) {
-			s.nbSkipped += 1
-			s.skipped += entry.Size
-			err = nil
-		} else if err == nil {
-			s.nbArchived += 1
-			s.archived += entry.Size
+		defer cache.Close()
+		for {
+			select {
+			case <-InterruptedChannel:
+				// Early exit. Note this as an error.
+				s.errors.Add(1)
+				close(c)
+				return
+			case item, ok := <-inputs:
+				if !ok {
+					s.log.Printf("Done hashing. ")
+					close(c)
+					return
+				}
+				if item.IsDir() {
+					panic("This can't happen; enumerateInputs() should eat all the directories.")
+				}
+				size := item.Size()
+				cachedItem := FindInCache(cache, item.fullPath)
+				if wasHashed, err := updateFile(cachedItem, item); err != nil {
+					// Eat the error and continue archiving other items.
+					s.errors.Add(1)
+					s.log.Printf("Failed to process %s: %s. ", item.fullPath, err)
+					continue
+				} else if wasHashed {
+					//s.log.Printf("Hashed: %s. ", item.relPath)
+					s.nbHashed.Add(1)
+					s.bytesHashed.Add(size)
+				} else {
+					s.nbNotHashed.Add(1)
+					s.bytesNotHashed.Add(size)
+				}
+				c <- itemToArchive{item.fullPath, item.relPath, cachedItem.Sha1, size}
+			}
 		}
-		return err
-	}
-	if s.stdout != nil {
-		fmt.Fprintf(s.stdout, "%d files %1.1fmb Archiving ...\r", s.nbArchived+s.nbSkipped, float64(s.archived+s.skipped)/1024./1024.)
-	}
-	return nil
+	}()
+	return c
 }
 
-func casArchive(a DumbcasApplication, entries *Entry, cas CasTable) (string, error) {
-	a.GetLog().Printf("casArchive(%d entries)\n", entries.CountMembers())
-	root := ""
-	if filepath.Separator == '/' {
-		root = "/"
-	}
-	stats := Stats{stdout: a.GetOut()}
-	err := stats.recurseTree(root, entries, cas)
-	fmt.Fprintf(a.GetOut(), "\n")
-	// Serialize the entry file to archive it too.
-	data, err := json.Marshal(&entries)
+// Archives one item in the CAS table.
+func (s *Stats) archiveItem(item itemToArchive, cas CasTable) {
+	f, err := os.Open(item.fullPath)
 	if err != nil {
-		return "", fmt.Errorf("Failed to marshall entry file: %s\n", err)
+		s.errors.Add(1)
+		s.log.Printf("Failed to archive %s: %s. ", item.fullPath, err)
+		return
 	}
-	entrySha1, err := AddBytes(cas, data)
+	defer f.Close()
+	err = cas.AddEntry(f, item.sha1)
 	if os.IsExist(err) {
-		stats.nbSkipped += 1
-		stats.skipped += int64(len(data))
-	} else if err != nil {
-		return "", fmt.Errorf("Failed to create %s: %s\n", entrySha1, err)
+		s.nbNotArchived.Add(1)
+		s.bytesNotArchived.Add(item.size)
+	} else if err == nil {
+		s.nbArchived.Add(1)
+		s.bytesArchived.Add(item.size)
 	} else {
-		stats.nbArchived += 1
-		stats.archived += int64(len(data))
+		s.errors.Add(1)
+		s.log.Printf("Failed to archive %s: %s. ", item.fullPath, err)
 	}
-	a.GetLog().Printf(
-		"Archived %d files (%d bytes) Skipped %d files, (%d bytes)\n",
-		stats.nbArchived, stats.archived, stats.nbSkipped, stats.skipped)
-	return entrySha1, nil
 }
 
-// Convert to absolute paths and evaluate environment variables.
+// Creates the Entry instance and the necessary Entry tree for |item|.
+func makeEntry(root *Entry, item itemToArchive) {
+	for _, p := range strings.Split(item.relPath, string(filepath.Separator)) {
+		if root.Files == nil {
+			root.Files = make(map[string]*Entry)
+		}
+		if root.Files[p] == nil {
+			root.Files[p] = &Entry{}
+		}
+		root = root.Files[p]
+	}
+	root.Sha1 = item.sha1
+	root.Size = item.size
+}
+
+// Archives the items.
+func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan itemToArchive) <-chan string {
+	c := make(chan string)
+	go func() {
+		entryRoot := &Entry{}
+		cont := true
+		for cont {
+			select {
+			case <-InterruptedChannel:
+				// Early exit. Note this as an error.
+				s.errors.Add(1)
+				close(c)
+				return
+			case item, ok := <-items:
+				if !ok {
+					cont = false
+					continue
+				}
+				//s.log.Printf("Archiving: %s. ", item.relPath)
+				makeEntry(entryRoot, item)
+				s.archiveItem(item, cas)
+			}
+		}
+		// Serializes the entry file to archive it too.
+		data, err := json.Marshal(entryRoot)
+		if err != nil {
+			s.errors.Add(1)
+			s.log.Printf("Failed to marshal entry file: %s. ", err)
+			c <- ""
+		} else {
+			entrySha1, err := AddBytes(cas, data)
+			if os.IsExist(err) {
+				s.nbNotArchived.Add(1)
+				s.bytesNotArchived.Add(int64(len(data)))
+				c <- entrySha1
+			} else if err == nil {
+				s.nbArchived.Add(1)
+				s.bytesArchived.Add(int64(len(data)))
+				c <- entrySha1
+			} else {
+				s.errors.Add(1)
+				s.log.Printf("Failed to archive entry file: %s. ", err)
+				c <- ""
+			}
+		}
+		close(c)
+	}()
+	return c
+}
+
+// Converts to absolute paths and evaluate environment variables.
 func cleanupList(relDir string, inputs []string) {
 	for index, item := range inputs {
 		item = os.ExpandEnv(item)
@@ -267,6 +334,14 @@ func cleanupList(relDir string, inputs []string) {
 	}
 }
 
+func toMb(i int64) float64 {
+	return float64(i) / 1024. / 1024.
+}
+
+// Loads the list of inputs and starts the concurrent processes:
+// - Enumerating the trees.
+// - Updating the hash for each items in the cache.
+// - Archiving items.
 func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 	if err := c.Parse(a, true); err != nil {
 		return err
@@ -285,19 +360,71 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 	inputs = append(inputs, toArchive)
 	a.GetLog().Printf("Found %d entries to backup in %s", len(inputs), toArchive)
 	cleanupList(path.Dir(toArchive), inputs)
-	entry, err := processWithCache(a, inputs)
-	if err != nil {
-		return err
-	}
 
-	// Now the archival part. Create the basic directory structure.
-	entrySha1, err := casArchive(a, entry, c.cas)
-	if err != nil {
-		return err
+	// Start the processes.
+	s := Stats{log: a.GetLog()}
+	items_to_scan := s.enumerateInputs(inputs)
+	items_hashed := s.hashInputs(a, items_to_scan)
+	entry := s.archiveInputs(a, c.cas, items_hashed)
+
+	for {
+		select {
+		case <-InterruptedChannel:
+			// Early exit. Note this as an error.
+			return fmt.Errorf("Was interrupted.")
+		case item, ok := <-entry:
+			if !ok {
+				e := s.errors.Get()
+				if e != 0 {
+					return fmt.Errorf("Got %d errors!", e)
+				} else {
+					return fmt.Errorf("Was likely interrupted.")
+				}
+			}
+			if item != "" {
+				node := &Node{Entry: item, Comment: c.comment}
+				_, err = c.nodes.AddEntry(node, path.Base(toArchive))
+				fmt.Fprintf(
+					a.GetOut(),
+					"%d(%1.1fmb) %d(%1.1fmb) hashed %d(%1.1fmb) in cache %d(%1.1fmb) archived  %d(%1.1fmb) skipped %d errors\n",
+					s.found.Get(),
+					toMb(s.totalSize.Get()),
+					s.nbHashed.Get(),
+					toMb(s.bytesHashed.Get()),
+					s.nbNotHashed.Get(),
+					toMb(s.bytesNotHashed.Get()),
+					s.nbArchived.Get(),
+					toMb(s.bytesArchived.Get()),
+					s.nbNotArchived.Get(),
+					toMb(s.bytesNotArchived.Get()),
+					s.errors.Get())
+				return nil
+			} else {
+				e := s.errors.Get()
+				if e != 0 {
+					return fmt.Errorf("Got %d errors!", e)
+				} else {
+					return fmt.Errorf("Unexpected error.")
+				}
+			}
+		case <-time.After(5 * time.Second):
+			fmt.Fprintf(
+				a.GetOut(),
+				"%d(%1.1fmb) %d(%1.1fmb) hashed %d(%1.1fmb) in cache %d(%1.1fmb) archived  %d(%1.1fmb) skipped %d errors\r",
+				s.found.Get(),
+				toMb(s.totalSize.Get()),
+				s.nbHashed.Get(),
+				toMb(s.bytesHashed.Get()),
+				s.nbNotHashed.Get(),
+				toMb(s.bytesNotHashed.Get()),
+				s.nbArchived.Get(),
+				toMb(s.bytesArchived.Get()),
+				s.nbNotArchived.Get(),
+				toMb(s.bytesNotArchived.Get()),
+				s.errors.Get())
+		}
 	}
-	node := &Node{Entry: entrySha1, Comment: c.comment}
-	_, err = c.nodes.AddEntry(node, path.Base(toArchive))
-	return err
+	return nil
 }
 
 func (c *archiveRun) Run(a Application, args []string) int {

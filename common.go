@@ -104,7 +104,7 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) bool {
 		if IsInterrupted() {
 			break
 		}
-		dirs, err := f.Readdir(1024)
+		dirs, err := f.Readdir(128)
 		if err != nil && err != io.EOF {
 			c <- TreeItem{Error: err}
 			return false

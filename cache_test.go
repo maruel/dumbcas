@@ -10,7 +10,9 @@ limitations under the License. */
 package main
 
 import (
+	"bytes"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime/debug"
 	"testing"
@@ -96,21 +98,23 @@ func testCacheImpl(t *TB, load func() (Cache, error)) {
 			c.Root().Print(os.Stderr, "")
 			t.Fatalf("Oops: %d", c.Root().CountMembers())
 		}
-		c.Root().Files = make(map[string]*EntryCache)
-		c.Root().Files["foo"] = &EntryCache{Sha1: "x", Size: 1, Timestamp: 2, LastTested: now}
+		i := FindInCache(c, path.Join("foo", "bar"))
+		i.Sha1 = "x"
+		i.Size = 1
+		i.Timestamp = 2
+		i.LastTested = now
 		c.Close()
 	}
 	{
 		c, err := load()
 		t.Assertf(err == nil, "Failed to create cache", err)
-		if c.Root().CountMembers() != 2 {
-			c.Root().Print(os.Stderr, "")
-			t.Fatalf("Oops: %d", c.Root().CountMembers())
-		}
+		b := &bytes.Buffer{}
+		c.Root().Print(b, "")
+		t.Assertf(b.String() == "- 'foo'\n  - 'bar'\n    Sha1: x\n    Size: 1\n", "Unexpected: %s", b.String())
 		foo := c.Root().Files["foo"]
-		if foo.Sha1 != "x" || foo.Size != 1 || foo.Timestamp != 2 || foo.LastTested != now {
-			c.Root().Print(os.Stderr, "")
-			t.Fatalf("Oops: %d", c.Root().CountMembers())
+		bar := foo.Files["bar"]
+		if bar.Sha1 != "x" || bar.Size != 1 || bar.Timestamp != 2 || bar.LastTested != now {
+			t.Assertf(false, "Oops: %d", c.Root().CountMembers())
 		}
 		c.Close()
 	}

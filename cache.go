@@ -20,12 +20,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 )
-
-func init() {
-	gob.Register(&EntryCache{})
-}
 
 // Describe an entry in the cache. Can be either a file or a directory. Using
 // this structure is more compact than a flat list for deep trees.
@@ -138,8 +133,9 @@ func loadCacheInner(cacheDir string, l *log.Logger) (Cache, error) {
 	// - The program works fine without cache so it's not a big deal if it ever
 	//   become backward incomatible.
 	d := gob.NewDecoder(f)
-	if err := d.Decode(cache.root); err != nil {
+	if err := d.Decode(cache.root); err != nil && err != io.EOF {
 		// Ignore unmarshaling failure by reseting the content.
+		cache.log.Printf("Failed loading cache: %s", err)
 		cache.root = &EntryCache{}
 	}
 	if _, err = f.Seek(0, 0); err != nil {
@@ -165,13 +161,7 @@ func (c *cache) Close() {
 		c.f = nil
 	}()
 
-	// Trim anything > ~1yr old.
-	one_year := time.Now().Unix() - (365 * 24 * 60 * 60)
-	for relFile, file := range c.root.Files {
-		if file.LastTested < one_year {
-			delete(c.root.Files, relFile)
-		}
-	}
+	// TODO(maruel): Trim anything > ~1yr old.
 	c.log.Printf("Saving Cache: %d entries.", c.root.CountMembers()-1)
 	if err := c.f.Truncate(0); err != nil {
 		c.log.Printf("Failed to truncate %s: %s", c.f.Name(), err)

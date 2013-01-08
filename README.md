@@ -40,23 +40,23 @@ Backup and serve over the web
     echo /random/path> toArchive.txt
 
     # Archive the files to /path/to/storage.
-    dumbcas archive -out=/path/to/storage -comment="My first backup" toArchive.txt
+    dumbcas archive -root=/path/to/storage -comment="My first backup" toArchive.txt
 
     # Verify the archive. Verifies all the sha-1 are valids.
-    dumbcas fsck -out=/path/to/storage
+    dumbcas fsck -root=/path/to/storage
 
     # Serve over http://localhost:8010/
-    dumbcas web -out=/path/to/storage
+    dumbcas web -root=/path/to/storage
 
 You can set `$DUMBCAS_ROOT` environment variable to use a default value for
--out.
+-root.
 
 
 Delete a backup set
 -------------------
 
     rm /path/to/storage/nodes/<month>/<name>
-    dumbcas gc -out=/path/to/storage
+    dumbcas gc -root=/path/to/storage
 
 As simple as that.
 

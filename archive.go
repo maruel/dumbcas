@@ -111,6 +111,7 @@ type statsValues struct {
 	errors           syncInt
 	found            syncInt // enumerateInputs()
 	totalSize        syncInt
+	enumerationDone  syncInt
 	nbHashed         syncInt // hashInputs()
 	bytesHashed      syncInt
 	nbNotHashed      syncInt
@@ -231,6 +232,8 @@ func (s *stats) enumerateInputs(inputs []string) <-chan inputItem {
 			}
 		}
 		end := time.Now().UTC()
+		// Means we can start calculating the ETA.
+		s.enumerationDone.Add(1)
 		s.out <- fmt.Sprintf("Done enumerating inputs: %s", end.Sub(start).String())
 	}()
 	return c

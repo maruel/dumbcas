@@ -48,6 +48,7 @@ func (a *DumbcasAppMock) LoadCache() (Cache, error) {
 }
 
 func TestCacheNormal(t *testing.T) {
+	// Just makes sure loading the real cache doesn't crash.
 	t.Parallel()
 	tb := MakeTB(t)
 	cache, err := loadCache(tb.log)
@@ -78,6 +79,7 @@ func TestCacheRedirected(t *testing.T) {
 func TestCacheMock(t *testing.T) {
 	t.Parallel()
 	tb := MakeTB(t)
+	// Keep the cache alive, since it's all in-memory.
 	mock := &mockCache{tb, &EntryCache{}, false, nil}
 	load := func() (Cache, error) {
 		return mock, nil

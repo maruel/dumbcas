@@ -88,8 +88,6 @@ func readFileAsStrings(filepath string) ([]string, error) {
 	return lines, err
 }
 
-// Statistics are used with atomic functions. While not Go-idiomatic, it's much
-// faster.
 type syncInt int64
 
 func (s *syncInt) Add(i int64) {
@@ -100,10 +98,14 @@ func (s *syncInt) Get() int64 {
 	return atomic.LoadInt64((*int64)(s))
 }
 
-// Stores statistic of the on-going process.
-type Stats struct {
+func (s *syncInt) g() syncInt {
+	return syncInt(s.Get())
+}
+
+// Statistics are used with atomic functions. While not Go-idiomatic, it's much
+// faster than using mutexes when calling i++ 100k times.
+type StatsValues struct {
 	errors           syncInt
-	interrupted      syncInt
 	found            syncInt // enumerateInputs()
 	totalSize        syncInt
 	nbHashed         syncInt // hashInputs()
@@ -114,8 +116,46 @@ type Stats struct {
 	bytesArchived    syncInt
 	nbNotArchived    syncInt
 	bytesNotArchived syncInt
-	out              chan<- string
-	done             chan<- bool
+}
+
+// Stores statistic of the on-going process.
+type Stats struct {
+	StatsValues
+	interrupted syncInt
+	out         chan<- string
+	done        chan<- bool
+}
+
+// Creates a copy of StatsValues. Note that the copy *may* be inconsistent.
+func (s *StatsValues) Copy() *StatsValues {
+	return &StatsValues{
+		s.errors.g(),
+		s.found.g(),
+		s.totalSize.g(),
+		s.nbHashed.g(),
+		s.bytesHashed.g(),
+		s.nbNotHashed.g(),
+		s.bytesNotHashed.g(),
+		s.nbArchived.g(),
+		s.bytesArchived.g(),
+		s.nbNotArchived.g(),
+		s.bytesNotArchived.g(),
+	}
+}
+
+// Compares two local copy of StatsValues. Must *not* be used on a Stats instance.
+func (lhs *StatsValues) Equals(rhs *StatsValues) bool {
+	return (lhs.errors.Get() == rhs.errors.Get() &&
+		lhs.found.Get() == rhs.found.Get() &&
+		lhs.totalSize.Get() == rhs.totalSize.Get() &&
+		lhs.nbHashed.Get() == rhs.nbHashed.Get() &&
+		lhs.bytesHashed.Get() == rhs.bytesHashed.Get() &&
+		lhs.nbNotHashed.Get() == rhs.nbNotHashed.Get() &&
+		lhs.bytesNotHashed.Get() == rhs.bytesNotHashed.Get() &&
+		lhs.nbArchived.Get() == rhs.nbArchived.Get() &&
+		lhs.bytesArchived.Get() == rhs.bytesArchived.Get() &&
+		lhs.nbNotArchived.Get() == rhs.nbNotArchived.Get() &&
+		lhs.bytesNotArchived.Get() == rhs.bytesNotArchived.Get())
 }
 
 type inputItem struct {
@@ -130,6 +170,12 @@ func (s *Stats) enumerateInputs(inputs []string) <-chan inputItem {
 	// Throtttle after 128k entries.
 	c := make(chan inputItem, 128000)
 	go func() {
+		start := time.Now().UTC()
+		defer func() {
+			close(c)
+			s.done <- true
+		}()
+
 		// Do each entry serially. In theory there would be marginal gain by doing
 		// them concurrently if the inputs are on different drives but for the
 		// common use case where it's multiple directories on a single disk-based
@@ -151,8 +197,6 @@ func (s *Stats) enumerateInputs(inputs []string) <-chan inputItem {
 					case <-InterruptedChannel:
 						// Early exit.
 						s.interrupted.Add(1)
-						close(c)
-						s.done <- true
 						return
 					case item, ok := <-d:
 						if !ok {
@@ -183,9 +227,8 @@ func (s *Stats) enumerateInputs(inputs []string) <-chan inputItem {
 				c <- inputItem{input, relPath, stat}
 			}
 		}
-		s.out <- fmt.Sprintf("Done enumerating inputs.")
-		close(c)
-		s.done <- true
+		end := time.Now().UTC()
+		s.out <- fmt.Sprintf("Done enumerating inputs: %s", end.Sub(start).String())
 	}()
 	return c
 }
@@ -206,20 +249,21 @@ func (s *Stats) hashInputs(a DumbcasApplication, inputs <-chan inputItem) <-chan
 		if err != nil {
 			s.out <- fmt.Sprintf("Failed to load cache: %s\nWARNING: It will be unbearably slow!", err)
 		}
-		defer cache.Close()
+		defer func() {
+			// Must save the cache *before* sending the 'done' signal.
+			close(c)
+			cache.Close()
+			s.done <- true
+		}()
 		for {
 			select {
 			case <-InterruptedChannel:
 				// Early exit.
 				s.interrupted.Add(1)
-				close(c)
-				s.done <- true
 				return
 			case item, ok := <-inputs:
 				if !ok {
 					s.out <- fmt.Sprintf("Done hashing.")
-					close(c)
-					s.done <- true
 					return
 				}
 				if item.IsDir() {
@@ -288,6 +332,10 @@ func makeEntry(root *Entry, item itemToArchive) {
 func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan itemToArchive) <-chan string {
 	c := make(chan string)
 	go func() {
+		defer func() {
+			close(c)
+			s.done <- true
+		}()
 		entryRoot := &Entry{}
 		cont := true
 		for cont {
@@ -295,8 +343,6 @@ func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan i
 			case <-InterruptedChannel:
 				// Early exit.
 				s.interrupted.Add(1)
-				close(c)
-				s.done <- true
 				return
 			case item, ok := <-items:
 				if !ok {
@@ -328,8 +374,6 @@ func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan i
 				s.out <- fmt.Sprintf("Failed to archive entry file: %s", err)
 			}
 		}
-		close(c)
-		s.done <- true
 	}()
 	return c
 }
@@ -381,7 +425,22 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 	items_hashed := s.hashInputs(a, items_to_scan)
 	entry := s.archiveInputs(a, c.cas, items_hashed)
 
+	headerWasPrinted := false
+	columns := []string{
+		"Found",
+		"Hashed",
+		"In cache",
+		"Archived",
+		"Skipped",
+		"Done",
+	}
+	for i, _ := range columns {
+		columns[i] = fmt.Sprintf("%-19s", columns[i])
+	}
+	column := strings.TrimSpace(strings.Join(columns, ""))
+
 	errDone := errors.New("Dummy")
+	prevStats := s.Copy()
 	for err == nil {
 		select {
 		case line := <-output:
@@ -415,34 +474,48 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 					err = fmt.Errorf("Unexpected error.")
 				}
 			}
-		case <-time.After(time.Second):
-			fmt.Fprintf(
-				a.GetOut(),
-				"%d(%1.1fmb)found %d(%1.1fmb)hashed %d(%1.1fmb)in cache %d(%1.1fmb)archived  %d(%1.1fmb)skipped %d errors\r",
-				s.found.Get(),
-				toMb(s.totalSize.Get()),
-				s.nbHashed.Get(),
-				toMb(s.bytesHashed.Get()),
-				s.nbNotHashed.Get(),
-				toMb(s.bytesNotHashed.Get()),
-				s.nbArchived.Get(),
-				toMb(s.bytesArchived.Get()),
-				s.nbNotArchived.Get(),
-				toMb(s.bytesNotArchived.Get()),
-				s.errors.Get())
+		case <-time.After(5 * time.Second):
+			nextStats := s.Copy()
+			if !prevStats.Equals(nextStats) {
+				if !headerWasPrinted {
+					a.GetLog().Printf(column)
+					headerWasPrinted = true
+				}
+				prevStats = nextStats
+				fractionDone := float64(prevStats.bytesArchived.Get()+prevStats.bytesNotArchived.Get()) / float64(prevStats.totalSize.Get())
+				a.GetLog().Printf(
+					"%6d(%8.1fmb) %6d(%8.1fmb) %6d(%8.1fmb) %6d(%8.1fmb) %6d(%8.1fmb) %3.1f%% %d errors",
+					prevStats.found.Get(),
+					toMb(prevStats.totalSize.Get()),
+					prevStats.nbHashed.Get(),
+					toMb(prevStats.bytesHashed.Get()),
+					prevStats.nbNotHashed.Get(),
+					toMb(prevStats.bytesNotHashed.Get()),
+					prevStats.nbArchived.Get(),
+					toMb(prevStats.bytesArchived.Get()),
+					prevStats.nbNotArchived.Get(),
+					toMb(prevStats.bytesNotArchived.Get()),
+					100.*fractionDone,
+					prevStats.errors.Get())
+			}
 		}
 	}
 	if err == errDone {
 		err = nil
+	}
+	if IsInterrupted() {
+		fmt.Fprintf(a.GetOut(), "Was interrupted, waiting for processes to terminate.\n")
 	}
 	// Make sure all the worker threads are done. They may still be processing in
 	// case of interruption.
 	for i := 0; i < 3; i++ {
 		<-done
 	}
+	fmt.Fprintf(a.GetOut(), column+"\n")
+	fractionDone := float64(s.bytesArchived.Get()+s.bytesNotArchived.Get()) / float64(s.totalSize.Get())
 	fmt.Fprintf(
 		a.GetOut(),
-		"%d(%1.1fmb)found %d(%1.1fmb)hashed %d(%1.1fmb)in cache %d(%1.1fmb)archived  %d(%1.1fmb)skipped %d errors\n",
+		"%7d(%7.1fmb) %7d(%7.1fmb) %7d(%7.1fmb) %7d(%7.1fmb) %7d(%7.1fmb) %3.1f%% %d errors\n",
 		s.found.Get(),
 		toMb(s.totalSize.Get()),
 		s.nbHashed.Get(),
@@ -453,6 +526,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 		toMb(s.bytesArchived.Get()),
 		s.nbNotArchived.Get(),
 		toMb(s.bytesNotArchived.Get()),
+		100.*fractionDone,
 		s.errors.Get())
 	return nil
 }

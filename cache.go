@@ -22,6 +22,10 @@ import (
 	"strings"
 )
 
+func init() {
+	gob.Register(&EntryCache{})
+}
+
 // Describe an entry in the cache. Can be either a file or a directory. Using
 // this structure is more compact than a flat list for deep trees.
 type EntryCache struct {
@@ -62,9 +66,9 @@ func (e *EntryCache) CountMembers() int {
 }
 
 type cache struct {
-	root *EntryCache
-	f    *os.File
-	log  *log.Logger
+	root     *EntryCache
+	filePath string
+	log      *log.Logger
 }
 
 type Cache interface {
@@ -109,22 +113,25 @@ func getCachePath() (string, error) {
 func loadCache(l *log.Logger) (Cache, error) {
 	cacheDir, err := getCachePath()
 	if err != nil {
-		return &cache{&EntryCache{}, nil, l}, err
+		return &cache{&EntryCache{}, "", l}, err
 	}
 	return loadCacheInner(cacheDir, l)
 }
 
 func loadCacheInner(cacheDir string, l *log.Logger) (Cache, error) {
-	cache := &cache{&EntryCache{}, nil, l}
+	cache := &cache{&EntryCache{}, path.Join(cacheDir, "cache.gob"), l}
 	if err := os.Mkdir(cacheDir, 0700); err != nil && !os.IsExist(err) {
 		return cache, fmt.Errorf("Failed to access %s: %s", cacheDir, err)
 	}
-	cacheFile := path.Join(cacheDir, "cache.gob")
-	f, err := os.OpenFile(cacheFile, os.O_CREATE|os.O_RDWR, 0600)
+	f, err := os.OpenFile(cache.filePath, os.O_RDONLY, 0600)
 	if f == nil {
-		return cache, fmt.Errorf("Failed to access %s: %s", cacheFile, err)
+		if os.IsNotExist(err) {
+			// Do not this as an error, it would be confusing.
+			return cache, nil
+		}
+		return cache, fmt.Errorf("Failed to access %s: %s", cache.filePath, err)
 	}
-
+	defer f.Close()
 	// The cache uses gob instead of json because:
 	// - The data can be read and written incrementally instead of having to read
 	//   it all at once.
@@ -134,16 +141,12 @@ func loadCacheInner(cacheDir string, l *log.Logger) (Cache, error) {
 	//   become backward incomatible.
 	d := gob.NewDecoder(f)
 	if err := d.Decode(cache.root); err != nil && err != io.EOF {
-		// Ignore unmarshaling failure by reseting the content.
+		// Ignore unmarshaling failure by reseting the content. Better be safe than
+		// sorry.
 		cache.log.Printf("Failed loading cache: %s", err)
 		cache.root = &EntryCache{}
 	}
-	if _, err = f.Seek(0, 0); err != nil {
-		f.Close()
-		return cache, fmt.Errorf("Failed to seek %s: %s", cacheFile, err)
-	}
 	cache.log.Printf("Loaded %d entries from the cache.", cache.root.CountMembers()-1)
-	cache.f = f
 	return cache, nil
 }
 
@@ -152,24 +155,25 @@ func (c *cache) Root() *EntryCache {
 }
 
 func (c *cache) Close() {
-	if c.f == nil {
+	if c.filePath == "" {
 		return
 	}
-
-	defer func() {
-		c.f.Close()
-		c.f = nil
-	}()
-
+	f, err := os.OpenFile(c.filePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	if f == nil {
+		c.log.Printf("Failed to save cache %s: %s", c.filePath, err)
+		return
+	}
 	// TODO(maruel): Trim anything > ~1yr old.
 	c.log.Printf("Saving Cache: %d entries.", c.root.CountMembers()-1)
-	if err := c.f.Truncate(0); err != nil {
-		c.log.Printf("Failed to truncate %s: %s", c.f.Name(), err)
-		return
-	}
-	e := gob.NewEncoder(c.f)
+	e := gob.NewEncoder(f)
 	if err := e.Encode(c.root); err != nil {
-		c.log.Printf("Failed to write %s: %s", c.f.Name(), err)
-		return
+		c.log.Printf("Failed to write %s: %s", c.filePath, err)
+	}
+	f.Close()
+	stat, err := os.Stat(c.filePath)
+	if err != nil {
+		c.log.Printf("Unexpected error while stat'ing %s: %s", c.filePath, err)
+	} else if stat.Size() < 100 {
+		c.log.Printf("Failed to serialize %s: %d", c.filePath, stat.Size())
 	}
 }

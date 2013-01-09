@@ -14,7 +14,9 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 )
@@ -38,6 +40,9 @@ func (f *WebDumbcasAppMock) goWeb() {
 	cmd := FindCommand(f, "web")
 	r := cmd.CommandRun().(*webRun)
 	r.Root = "\\foo"
+	// Simulate -local. It is important to use it while testing otherwise it
+	// may trigger the Windows firewall.
+	r.local = true
 	c := make(chan net.Listener)
 	go func() {
 		err := r.main(f, c)
@@ -102,6 +107,7 @@ func TestWeb(t *testing.T) {
 		"dir1/dir2/file2": "content2",
 	}
 	sha1tree, nodeName, sha1 := archiveData(f.TB, f.cas, f.nodes, tree1)
+	nodeName = strings.Replace(nodeName, string(filepath.Separator), "/", -1)
 
 	f.log.Print("T: Serve over web and verify files are accessible.")
 	f.goWeb()
@@ -116,7 +122,7 @@ func TestWeb(t *testing.T) {
 	re := regexp.MustCompile("\\\"(.*)\\\"")
 	nodeItems := re.FindStringSubmatch(actual)
 	f.Assertf(len(nodeItems) == 2, "%s", actual)
-	f.Assertf(month+"/"+nodeItems[1] == nodeName, "Unexpected grep")
+	f.Assertf(month+"/"+nodeItems[1] == nodeName, "Unexpected grep: %s", nodeName)
 
 	f.log.Print("T: Get the node.")
 	r = f.get("/content/retrieve/nodes/"+nodeName, "/content/retrieve/nodes/"+nodeName+"/")

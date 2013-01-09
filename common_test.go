@@ -17,7 +17,7 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 )
 
 func GetRandRune() rune {
@@ -40,7 +40,7 @@ func makeTempDir(t *TB, name string) string {
 	for i := 0; i < length; i++ {
 		ranPath[i] = GetRandRune()
 	}
-	tempFull := path.Join(tempDir, prefix+string(ranPath))
+	tempFull := filepath.Join(tempDir, prefix+string(ranPath))
 	for {
 		err := os.Mkdir(tempFull, 0700)
 		if os.IsExist(err) {
@@ -61,13 +61,13 @@ func removeTempDir(tempDir string) {
 
 func createTree(rootDir string, tree map[string]string) error {
 	for relPath, content := range tree {
-		base := path.Dir(relPath)
+		base := filepath.Dir(relPath)
 		if base != "." {
-			if err := os.MkdirAll(path.Join(rootDir, base), 0700); err != nil && !os.IsExist(err) {
+			if err := os.MkdirAll(filepath.Join(rootDir, base), 0700); err != nil && !os.IsExist(err) {
 				return err
 			}
 		}
-		f, err := os.Create(path.Join(rootDir, relPath))
+		f, err := os.Create(filepath.Join(rootDir, relPath))
 		if err != nil {
 			return err
 		}

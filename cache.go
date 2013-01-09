@@ -16,7 +16,6 @@ import (
 	"log"
 	"os"
 	"os/user"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -101,7 +100,7 @@ func getCachePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return path.Join(usr.HomeDir, ".dumbcas"), nil
+	return filepath.Join(usr.HomeDir, ".dumbcas"), nil
 }
 
 // Loads the cache from ~/.dumbcas/cache.json and keeps it open until the call
@@ -119,7 +118,7 @@ func loadCache(l *log.Logger) (Cache, error) {
 }
 
 func loadCacheInner(cacheDir string, l *log.Logger) (Cache, error) {
-	cache := &cache{&EntryCache{}, path.Join(cacheDir, "cache.gob"), l}
+	cache := &cache{&EntryCache{}, filepath.Join(cacheDir, "cache.gob"), l}
 	if err := os.Mkdir(cacheDir, 0700); err != nil && !os.IsExist(err) {
 		return cache, fmt.Errorf("Failed to access %s: %s", cacheDir, err)
 	}

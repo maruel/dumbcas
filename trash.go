@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 )
 
 const TrashName = "trash"
@@ -29,10 +29,10 @@ type Trash interface {
 }
 
 func MakeTrash(rootDir string) Trash {
-	if !path.IsAbs(rootDir) {
+	if !filepath.IsAbs(rootDir) {
 		return nil
 	}
-	return &trash{rootDir: rootDir, trashDir: path.Join(rootDir, TrashName)}
+	return &trash{rootDir: rootDir, trashDir: filepath.Join(rootDir, TrashName)}
 }
 
 func (t *trash) Move(relPath string) error {
@@ -45,13 +45,13 @@ func (t *trash) Move(relPath string) error {
 		}
 		t.created = true
 	}
-	relDir := path.Dir(relPath)
+	relDir := filepath.Dir(relPath)
 	if relDir != "." {
-		dir := path.Join(t.trashDir, relDir)
+		dir := filepath.Join(t.trashDir, relDir)
 		if err := os.MkdirAll(dir, 0750); err != nil && !os.IsExist(err) {
 			return fmt.Errorf("Failed to create %s: %s", dir, err)
 		}
 		log.Print("Created trash subdir " + dir)
 	}
-	return os.Rename(path.Join(t.rootDir, relPath), path.Join(t.trashDir, relPath))
+	return os.Rename(filepath.Join(t.rootDir, relPath), filepath.Join(t.trashDir, relPath))
 }

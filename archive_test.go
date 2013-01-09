@@ -10,7 +10,7 @@ limitations under the License. */
 package main
 
 import (
-	"path"
+	"path/filepath"
 	"sort"
 	"testing"
 )
@@ -38,7 +38,7 @@ func TestArchive(t *testing.T) {
 		f.Fatal(err)
 	}
 
-	args := []string{"archive", "-root=\\test_archive", path.Join(tempData, "toArchive")}
+	args := []string{"archive", "-root=\\test_archive", filepath.Join(tempData, "toArchive")}
 	f.Run(args, 0)
 	f.CheckBuffer(true, false)
 	items := EnumerateCasAsList(f.TB, f.cas)

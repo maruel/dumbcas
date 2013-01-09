@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -45,6 +46,7 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if suburl != "" {
 		// Slow search, it's fine for a mock.
 		for k, v := range m.entries {
+			k = strings.Replace(k, string(filepath.Separator), "/", -1)
 			if strings.HasPrefix(suburl, k) {
 				// Found.
 				rest := suburl[len(k):]
@@ -81,6 +83,7 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// List the corresponding "directory", if found.
 	items := []string{}
 	for k, _ := range m.entries {
+		k = strings.Replace(k, string(filepath.Separator), "/", -1)
 		if strings.HasPrefix(k, suburl) {
 			v := strings.SplitAfterN(k[len(suburl):], "/", 2)
 			items = append(items, v[0])
@@ -89,7 +92,6 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(items) != 0 {
 		if needRedirect {
 			// Not strictly valid but fine enough for a mock.
-			// TODO(maruel): posix-specific.
 			localRedirect(w, r, path.Base(r.URL.Path)+"/")
 			return
 		}
@@ -116,7 +118,7 @@ func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
 		if suffix != 0 {
 			nodeName += fmt.Sprintf("(%d)", suffix)
 		}
-		nodePath = path.Join(monthName, nodeName)
+		nodePath = filepath.Join(monthName, nodeName)
 		if _, ok := m.entries[nodePath]; !ok {
 			m.entries[nodePath] = data
 			break
@@ -235,7 +237,7 @@ func marshalData(t *TB, tree map[string]string) (map[string]string, []byte) {
 
 	// Then process entries itself.
 	data, err := json.Marshal(entries)
-	t.Assertf(err == nil, "Oops")
+	t.Assertf(err == nil, "Failed to json marshal: %s", err)
 	return sha1tree, data
 }
 
@@ -249,13 +251,13 @@ func archiveData(t *TB, cas CasTable, nodes NodesTable, tree map[string]string) 
 		t.Assertf(err == nil || err == os.ErrExist, "Unexpected error: %s", err)
 	}
 	entrySha1, err := AddBytes(cas, entries)
-	t.Assertf(err == nil, "Oops")
+	t.Assertf(err == nil, "Adding to cas failed: %s", err)
 
 	// And finally add the node.
 	now := time.Now().UTC()
 	nodeName, err := nodes.AddEntry(&Node{entrySha1, "useful comment"}, "fictious")
-	t.Assertf(err == nil, "Oops")
-	t.Assertf(strings.HasPrefix(nodeName, now.Format("2006-01/")), "Invalid node name %s", nodeName)
+	t.Assertf(err == nil, "Failed to add node: %s", err)
+	t.Assertf(strings.HasPrefix(nodeName, now.Format("2006-01")+string(filepath.Separator)), "Invalid node name %s", nodeName)
 	return sha1tree, nodeName, entrySha1
 }
 
@@ -269,7 +271,7 @@ func testNodesTableImpl(t *TB, cas CasTable, nodes NodesTable) {
 	archiveData(t, cas, nodes, tree1)
 	items := EnumerateNodesAsList(t, nodes)
 	t.Assertf(len(items) == 2, "Found items: %q", items)
-	name := items[0]
+	name := strings.Replace(items[0], string(filepath.Separator), "/", -1)
 
 	body := request(t, nodes, "/", 200, "")
 	t.Assertf(strings.Count(body, "<a ") == 2, "Unexpected output:\n%s", body)

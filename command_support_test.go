@@ -16,7 +16,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -70,8 +69,8 @@ func ReduceStackTrace(b []byte) []byte {
 	for i := 0; i < len(lines); i++ {
 		if !strings.HasPrefix(lines[i], "\t") {
 			// /path/to/file.go:<lineno> (<addr>)
-			// TODO(maruel): Check on Windows.
-			start := strings.LastIndex(lines[i], string(filepath.Separator))
+			// debug.Stack() uses "/" even on Windows.
+			start := strings.LastIndex(lines[i], "/")
 			end := strings.LastIndex(lines[i], " ")
 			if start != -1 && end != -1 {
 				lines[i] = lines[i][start+1 : end]

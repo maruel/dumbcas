@@ -14,7 +14,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -110,13 +110,13 @@ func (e *EntryFileSystem) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if toServe.isDir() {
 		if !hasTrailing {
-			localRedirect(w, r, path.Base(r.URL.Path)+"/")
+			localRedirect(w, r, filepath.Base(r.URL.Path)+"/")
 		} else {
 			toServe.ServeDir(w)
 		}
 	} else {
 		if hasTrailing {
-			localRedirect(w, r, path.Base(r.URL.Path))
+			localRedirect(w, r, filepath.Base(r.URL.Path))
 		} else {
 			r.URL.Path = "/" + toServe.Sha1
 			e.cas.ServeHTTP(w, r)

@@ -17,7 +17,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"regexp"
 )
 
@@ -52,8 +52,8 @@ func (c *casTable) filePath(hash string) string {
 		log.Printf("filePath(%s) is invalid", hash)
 		return ""
 	}
-	fullPath := path.Join(c.casDir, match[0][:c.prefixLength], match[0][c.prefixLength:])
-	if !path.IsAbs(fullPath) {
+	fullPath := filepath.Join(c.casDir, match[0][:c.prefixLength], match[0][c.prefixLength:])
+	if !filepath.IsAbs(fullPath) {
 		log.Printf("filePath(%s) is invalid", hash)
 		return ""
 	}
@@ -74,11 +74,11 @@ func makeCasTable(rootDir string) (CasTable, error) {
 	// Currently hardcoded for SHA-1 but could be used for any length.
 	hashLength := sha1.Size * 2
 
-	if !path.IsAbs(rootDir) {
+	if !filepath.IsAbs(rootDir) {
 		return nil, fmt.Errorf("MakeCasTable(%s) is not valid", rootDir)
 	}
-	rootDir = path.Clean(rootDir)
-	casDir := path.Join(rootDir, casName)
+	rootDir = filepath.Clean(rootDir)
+	casDir := filepath.Join(rootDir, casName)
 	if err := os.Mkdir(casDir, 0750); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("MakeCasTable(%s): failed to create %s: %s", casDir, err)
 	} else if !os.IsExist(err) {
@@ -86,7 +86,7 @@ func makeCasTable(rootDir string) (CasTable, error) {
 		// tested all the time.
 		for i := 0; i < prefixSpace(uint(prefixLength)); i++ {
 			prefix := fmt.Sprintf("%0*x", prefixLength, i)
-			if err := os.Mkdir(path.Join(casDir, prefix), 0750); err != nil && !os.IsExist(err) {
+			if err := os.Mkdir(filepath.Join(casDir, prefix), 0750); err != nil && !os.IsExist(err) {
 				return nil, fmt.Errorf("Failed to create %s: %s\n", prefix, err)
 			}
 		}
@@ -143,7 +143,7 @@ func (c *casTable) Enumerate() <-chan EnumerationEntry {
 					continue
 				}
 				// TODO(maruel): No need to read all at once.
-				prefixPath := path.Join(c.casDir, prefix)
+				prefixPath := filepath.Join(c.casDir, prefix)
 				subitems, err := readDirNames(prefixPath)
 				if err != nil {
 					items <- EnumerationEntry{Error: fmt.Errorf("Failed reading %s", prefixPath)}
@@ -152,7 +152,7 @@ func (c *casTable) Enumerate() <-chan EnumerationEntry {
 				}
 				for _, item := range subitems {
 					if !reRest.MatchString(item) {
-						c.trash.Move(path.Join(prefix, item))
+						c.trash.Move(filepath.Join(prefix, item))
 						c.SetFsckBit()
 						continue
 					}
@@ -191,14 +191,14 @@ func (c *casTable) Open(hash string) (ReadSeekCloser, error) {
 
 func (c *casTable) SetFsckBit() {
 	log.Printf("Marking for fsck")
-	f, _ := os.Create(path.Join(c.casDir, needFsckName))
+	f, _ := os.Create(filepath.Join(c.casDir, needFsckName))
 	if f != nil {
 		f.Close()
 	}
 }
 
 func (c *casTable) GetFsckBit() bool {
-	f, _ := os.Open(path.Join(c.casDir, needFsckName))
+	f, _ := os.Open(filepath.Join(c.casDir, needFsckName))
 	if f == nil {
 		return false
 	}
@@ -208,7 +208,7 @@ func (c *casTable) GetFsckBit() bool {
 
 func (c *casTable) ClearFsckBit() {
 	// Ignore the error.
-	os.Remove(path.Join(c.casDir, needFsckName))
+	os.Remove(filepath.Join(c.casDir, needFsckName))
 }
 
 func (c *casTable) Remove(hash string) error {
@@ -216,7 +216,7 @@ func (c *casTable) Remove(hash string) error {
 	if match == nil {
 		return fmt.Errorf("Remove(%s) is invalid", hash)
 	}
-	return c.trash.Move(path.Join(hash[:c.prefixLength], hash[c.prefixLength:]))
+	return c.trash.Move(filepath.Join(hash[:c.prefixLength], hash[c.prefixLength:]))
 }
 
 // Utility function when the data is already in memory but not yet hashed.

@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -223,7 +222,7 @@ func (s *Stats) enumerateInputs(inputs []string) <-chan inputItem {
 			} else {
 				s.found.Add(1)
 				s.totalSize.Add(stat.Size())
-				relPath := path.Base(input)
+				relPath := filepath.Base(input)
 				c <- inputItem{input, relPath, stat}
 			}
 		}
@@ -383,10 +382,10 @@ func cleanupList(relDir string, inputs []string) {
 	for index, item := range inputs {
 		item = os.ExpandEnv(item)
 		item = strings.Replace(item, "/", string(filepath.Separator), 0)
-		if !path.IsAbs(item) {
-			item = path.Join(relDir, item)
+		if !filepath.IsAbs(item) {
+			item = filepath.Join(relDir, item)
 		}
-		inputs[index] = path.Clean(item)
+		inputs[index] = filepath.Clean(item)
 	}
 }
 
@@ -415,7 +414,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 	// Make sure the file itself is archived too.
 	inputs = append(inputs, toArchive)
 	a.GetLog().Printf("Found %d entries to backup in %s", len(inputs), toArchive)
-	cleanupList(path.Dir(toArchive), inputs)
+	cleanupList(filepath.Dir(toArchive), inputs)
 
 	// Start the processes.
 	output := make(chan string)
@@ -462,7 +461,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 			}
 			if item != "" {
 				node := &Node{Entry: item, Comment: c.comment}
-				_, err = c.nodes.AddEntry(node, path.Base(toArchive))
+				_, err = c.nodes.AddEntry(node, filepath.Base(toArchive))
 				err = errDone
 			} else {
 				e := s.errors.Get()

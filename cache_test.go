@@ -12,7 +12,6 @@ package main
 import (
 	"bytes"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime/debug"
 	"testing"
@@ -100,7 +99,7 @@ func testCacheImpl(t *TB, load func() (Cache, error)) {
 			c.Root().Print(os.Stderr, "")
 			t.Fatalf("Oops: %d", c.Root().CountMembers())
 		}
-		i := FindInCache(c, path.Join("foo", "bar"))
+		i := FindInCache(c, filepath.Join("foo", "bar"))
 		i.Sha1 = "x"
 		i.Size = 1
 		i.Timestamp = 2

@@ -24,13 +24,15 @@ var cmdWeb = &Command{
 		c := &webRun{}
 		c.Init()
 		c.Flags.IntVar(&c.port, "port", 8010, "port number")
+		c.Flags.BoolVar(&c.local, "local", false, "only listed on localhost")
 		return c
 	},
 }
 
 type webRun struct {
 	CommonFlags
-	port int
+	port  int
+	local bool
 }
 
 // Converts an handler to log every HTTP request.
@@ -112,8 +114,14 @@ func (c *webRun) main(d DumbcasApplication, ready chan<- net.Listener) error {
 	serveMux.Handle("/content/retrieve/nodes/", Restrict(x, "GET"))
 	serveMux.Handle("/", Restrict(http.RedirectHandler("/content/retrieve/nodes/", http.StatusFound), "GET"))
 
+	var addr string
+	if c.local {
+		addr = fmt.Sprintf("localhost:%d", c.port)
+	} else {
+		addr = fmt.Sprintf(":%d", c.port)
+	}
 	s := &http.Server{
-		Addr:    fmt.Sprintf(":%d", c.port),
+		Addr:    addr,
 		Handler: &LoggingHandler{serveMux, d.GetLog()},
 	}
 	ls, e := net.Listen("tcp", s.Addr)

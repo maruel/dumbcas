@@ -67,7 +67,7 @@ type entryCache struct {
 }
 
 func loadNodesTable(rootDir string, cas CasTable, log *log.Logger) (NodesTable, error) {
-	nodesDir := path.Join(rootDir, nodesName)
+	nodesDir := filepath.Join(rootDir, nodesName)
 	if err := os.Mkdir(nodesDir, 0750); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("LoadNodesTable(%s): Failed to create %s: %s\n", rootDir, nodesDir, err)
 	}
@@ -97,7 +97,7 @@ func (n *nodesTable) AddEntry(node *Node, name string) (string, error) {
 	now := time.Now().UTC()
 	// Create one directory store per month.
 	monthName := now.Format("2006-01")
-	monthDir := path.Join(n.nodesDir, monthName)
+	monthDir := filepath.Join(n.nodesDir, monthName)
 	if err := os.MkdirAll(monthDir, 0750); err != nil && !os.IsExist(err) {
 		return "", fmt.Errorf("Failed to create %s: %s\n", monthDir, err)
 	}
@@ -109,26 +109,28 @@ func (n *nodesTable) AddEntry(node *Node, name string) (string, error) {
 		if suffix != 0 {
 			nodeName += fmt.Sprintf("(%d)", suffix)
 		}
-		nodePath = path.Join(monthDir, nodeName)
+		nodePath = filepath.Join(monthDir, nodeName)
 		f, err := os.OpenFile(nodePath, os.O_WRONLY|os.O_EXCL|os.O_CREATE, 0640)
 		if err != nil {
 			// Try ad nauseam.
 			suffix += 1
 		} else {
 			if _, err = f.Write(data); err != nil {
+				f.Close()
 				return "", fmt.Errorf("Failed to write %s: %s", f.Name(), err)
 			}
-			n.log.Printf("Saved node: %s", path.Join(monthName, nodeName))
+			f.Close()
+			n.log.Printf("Saved node: %s", filepath.Join(monthName, nodeName))
 			break
 		}
 	}
 
 	// Also update the tag by creating a symlink.
-	tagsDir := path.Join(n.nodesDir, tagsName)
+	tagsDir := filepath.Join(n.nodesDir, tagsName)
 	if err := os.MkdirAll(tagsDir, 0750); err != nil && !os.IsExist(err) {
 		return "", fmt.Errorf("Failed to create %s: %s\n", tagsDir, err)
 	}
-	tagPath := path.Join(tagsDir, name)
+	tagPath := filepath.Join(tagsDir, name)
 	relPath, err := filepath.Rel(tagsDir, nodePath)
 	if err != nil {
 		return "", err
@@ -136,13 +138,21 @@ func (n *nodesTable) AddEntry(node *Node, name string) (string, error) {
 	// Ignore error.
 	os.Remove(tagPath)
 	if err := os.Symlink(relPath, tagPath); err != nil {
-		return "", fmt.Errorf("Failed to create tag %s: %s", tagPath, err)
+		// Fallback to rewrite the same data.
+		f, err := os.OpenFile(tagPath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0640)
+		if err != nil {
+			return "", fmt.Errorf("Failed to create tag %s: %s", tagPath, err)
+		}
+		defer f.Close()
+		if _, err = f.Write(data); err != nil {
+			return "", fmt.Errorf("Failed to write %s: %s", tagPath, err)
+		}
 	}
-	return path.Join(monthName, nodeName), nil
+	return filepath.Join(monthName, nodeName), nil
 }
 
 func (n *nodesTable) Open(item string) (ReadSeekCloser, error) {
-	return os.Open(path.Join(n.nodesDir, item))
+	return os.Open(filepath.Join(n.nodesDir, item))
 }
 
 // Enumerates all the entries in the table.
@@ -168,7 +178,7 @@ func (n *nodesTable) Enumerate() <-chan EnumerationEntry {
 					continue
 				}
 				relPath := v.FullPath[len(n.nodesDir)+1:]
-				if path.Base(relPath) == TrashName {
+				if filepath.Base(relPath) == TrashName {
 					// TODO(maruel): Cancel iterating inside the directory!
 					continue
 				}
@@ -231,7 +241,7 @@ func (n *nodesTable) getNode(url string) (*Node, string, error) {
 		}
 		// Convert to OS file path.
 		relPath := strings.Replace(strings.Trim(prefix, "/"), "/", string(filepath.Separator), 0)
-		f, err := os.Open(path.Join(n.nodesDir, relPath))
+		f, err := os.Open(filepath.Join(n.nodesDir, relPath))
 		if err != nil {
 			return nil, "", err
 		}
@@ -244,6 +254,7 @@ func (n *nodesTable) getNode(url string) (*Node, string, error) {
 			node := &nodeCache{}
 			if err := loadReaderAsJson(f, &node.Node); err == nil {
 				node.lastAccess = time.Now()
+				// Note that prefix is using "/" as path separator.
 				go n.updateNodeCache(prefix, node)
 				return &node.Node, rest, err
 			} else {
@@ -360,7 +371,6 @@ func (n *nodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if node != nil {
 		// Check manually for the root.
 		if rest == "" && name[len(name)-1] != '/' {
-			// TODO(maruel): posix-specific.
 			localRedirect(w, r, path.Base(r.URL.Path)+"/")
 			return
 		}
@@ -375,7 +385,7 @@ func (n *nodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		localRedirect(w, r, path.Base(r.URL.Path)+"/")
 		return
 	}
-	files, _ := readDirFancy(path.Join(n.nodesDir, name))
+	files, _ := readDirFancy(strings.Replace(path.Join(n.nodesDir, name), "/", string(filepath.Separator), -1))
 	dirList(w, files)
 	return
 }

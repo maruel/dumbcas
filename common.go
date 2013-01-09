@@ -19,7 +19,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 )
 
@@ -117,7 +116,7 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) bool {
 				break
 			}
 			name := d.Name()
-			fullPath := path.Join(rootDir, name)
+			fullPath := filepath.Join(rootDir, name)
 			if d.IsDir() {
 				if !recurseEnumerateTree(fullPath, c) {
 					return false

@@ -79,8 +79,8 @@ func makeCasTable(rootDir string) (CasTable, error) {
 	}
 	rootDir = filepath.Clean(rootDir)
 	casDir := filepath.Join(rootDir, casName)
-	if err := os.Mkdir(casDir, 0750); err != nil && !os.IsExist(err) {
-		return nil, fmt.Errorf("MakeCasTable(%s): failed to create %s: %s", casDir, err)
+	if err := os.MkdirAll(casDir, 0750); err != nil && !os.IsExist(err) {
+		return nil, fmt.Errorf("MakeCasTable(%s): failed to create the directory: %s", casDir, err)
 	} else if !os.IsExist(err) {
 		// Create all the prefixes at initialization time so they don't need to be
 		// tested all the time.

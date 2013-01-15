@@ -11,12 +11,13 @@ package main
 
 import (
 	"fmt"
+	"github.com/maruel/subcommands/subcommandstest"
 	"testing"
 )
 
 func TestPrefixSpace(t *testing.T) {
 	t.Parallel()
-	tb := MakeTB(t)
+	tb := subcommandstest.MakeTB(t)
 	type S struct {
 		i int
 		s string
@@ -40,7 +41,7 @@ func TestPrefixSpace(t *testing.T) {
 
 func TestCasTableImpl(t *testing.T) {
 	t.Parallel()
-	tb := MakeTB(t)
+	tb := subcommandstest.MakeTB(t)
 	tempData := makeTempDir(tb, "cas")
 	defer removeTempDir(tempData)
 

@@ -14,6 +14,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"github.com/maruel/subcommands/subcommandstest"
 	"io"
 	"math/big"
 	"os"
@@ -31,7 +32,7 @@ func GetRandRune() rune {
 }
 
 // Creates a temporary directory.
-func makeTempDir(t *TB, name string) string {
+func makeTempDir(t *subcommandstest.TB, name string) string {
 	prefix := "dumbcas_" + name + "_"
 	length := 8
 	tempDir := os.TempDir()

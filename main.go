@@ -10,25 +10,26 @@ limitations under the License. */
 package main
 
 import (
+	"github.com/maruel/subcommands"
+	"github.com/maruel/subcommands/subcommandstest"
 	"log"
 	"os"
 )
 
-var application = &DefaultApplication{
+var application = &subcommands.DefaultApplication{
 	Name:  "dumbcas",
 	Title: "Dumbcas is a simple Content Addressed Datastore to be used as a simple backup tool.",
-	Commands: []*Command{
+	Commands: []*subcommands.Command{
 		cmdArchive,
 		cmdFsck,
 		cmdGc,
-		cmdHelp,
+		subcommands.CmdHelp,
 		cmdWeb,
 	},
 }
 
 type DumbcasApplication interface {
-	Application
-	GetLog() *log.Logger
+	subcommandstest.Application
 	// LoadCache must return a valid Cache instance even in case of failure.
 	LoadCache() (Cache, error)
 	MakeCasTable(rootDir string) (CasTable, error)
@@ -36,10 +37,11 @@ type DumbcasApplication interface {
 }
 
 type dumbapp struct {
-	*DefaultApplication
+	*subcommands.DefaultApplication
 	log *log.Logger
 }
 
+// Implementes subcommandstest.Application.
 func (d *dumbapp) GetLog() *log.Logger {
 	return d.log
 }
@@ -59,5 +61,5 @@ func (d *dumbapp) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, erro
 func main() {
 	log.SetFlags(log.Lmicroseconds)
 	d := &dumbapp{application, log.New(application.GetErr(), "", log.LstdFlags|log.Lmicroseconds)}
-	os.Exit(Run(d, nil))
+	os.Exit(subcommands.Run(d, nil))
 }

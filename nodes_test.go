@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/maruel/subcommands/subcommandstest"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -30,7 +31,7 @@ import (
 type mockNodesTable struct {
 	entries map[string][]byte
 	cas     CasTable
-	t       *TB
+	t       *subcommandstest.TB
 }
 
 func (a *DumbcasAppMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
@@ -42,7 +43,7 @@ func (a *DumbcasAppMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTabl
 }
 
 func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	m.t.log.Printf("mockNodesTable.ServeHTTP(%s)", r.URL.Path)
+	m.t.GetLog().Printf("mockNodesTable.ServeHTTP(%s)", r.URL.Path)
 	suburl := r.URL.Path[1:]
 	if suburl != "" {
 		// Slow search, it's fine for a mock.
@@ -103,7 +104,7 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
-	m.t.log.Printf("mockNodesTable.AddEntry(%s)", name)
+	m.t.GetLog().Printf("mockNodesTable.AddEntry(%s)", name)
 	data, err := json.Marshal(node)
 	if err != nil {
 		return "", fmt.Errorf("Failed to marshall internal state: %s", err)
@@ -133,7 +134,7 @@ func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
 }
 
 func (m *mockNodesTable) Enumerate() <-chan EnumerationEntry {
-	m.t.log.Printf("mockNodesTable.Enumerate() %d", len(m.entries))
+	m.t.GetLog().Printf("mockNodesTable.Enumerate() %d", len(m.entries))
 	c := make(chan EnumerationEntry)
 	go func() {
 		// TODO(maruel): Will blow up if mutated concurrently.
@@ -146,7 +147,7 @@ func (m *mockNodesTable) Enumerate() <-chan EnumerationEntry {
 }
 
 func (m *mockNodesTable) Open(item string) (ReadSeekCloser, error) {
-	m.t.log.Printf("mockNodesTable.Open(%s)", item)
+	m.t.GetLog().Printf("mockNodesTable.Open(%s)", item)
 	data, ok := m.entries[item]
 	if !ok {
 		return nil, fmt.Errorf("Missing: %s", item)
@@ -163,7 +164,7 @@ func (m *mockNodesTable) Remove(name string) error {
 }
 
 // Returns a sorted list of all the entries.
-func EnumerateNodesAsList(t *TB, nodes NodesTable) []string {
+func EnumerateNodesAsList(t *subcommandstest.TB, nodes NodesTable) []string {
 	items := []string{}
 	for v := range nodes.Enumerate() {
 		t.Assertf(v.Error == nil, "Unexpected failure")
@@ -175,13 +176,13 @@ func EnumerateNodesAsList(t *TB, nodes NodesTable) []string {
 
 func TestNodesTableMock(t *testing.T) {
 	t.Parallel()
-	tb := MakeTB(t)
+	tb := subcommandstest.MakeTB(t)
 	cas := &mockCasTable{make(map[string][]byte), false, tb}
 	nodes := &mockNodesTable{make(map[string][]byte), cas, tb}
 	testNodesTableImpl(tb, cas, nodes)
 }
 
-func request(t *TB, nodes NodesTable, path string, expectedCode int, expectedBody string) string {
+func request(t *subcommandstest.TB, nodes NodesTable, path string, expectedCode int, expectedBody string) string {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBufferString("GET " + path + " HTTP/1.1\r\nHost: test\r\n\r\n")))
 	t.Assertf(err == nil, "%s: %s", path, err)
 
@@ -197,7 +198,7 @@ func request(t *TB, nodes NodesTable, path string, expectedCode int, expectedBod
 }
 
 // Returns the tree of sha1s and the json encoded Node as bytes.
-func marshalData(t *TB, tree map[string]string) (map[string]string, []byte) {
+func marshalData(t *subcommandstest.TB, tree map[string]string) (map[string]string, []byte) {
 	sha1tree := map[string]string{}
 	entries := &Entry{}
 	for k, v := range tree {
@@ -232,7 +233,7 @@ func marshalData(t *TB, tree map[string]string) (map[string]string, []byte) {
 // Archives a tree fictious data.
 // Returns (tree of sha1s, name of the node, sha1 of the node entry).
 // Accept the paths as posix.
-func archiveData(t *TB, cas CasTable, nodes NodesTable, tree map[string]string) (map[string]string, string, string) {
+func archiveData(t *subcommandstest.TB, cas CasTable, nodes NodesTable, tree map[string]string) (map[string]string, string, string) {
 	sha1tree, entries := marshalData(t, tree)
 	for k, v := range tree {
 		err := cas.AddEntry(bytes.NewBuffer([]byte(v)), sha1tree[k])
@@ -249,7 +250,7 @@ func archiveData(t *TB, cas CasTable, nodes NodesTable, tree map[string]string) 
 	return sha1tree, nodeName, entrySha1
 }
 
-func testNodesTableImpl(t *TB, cas CasTable, nodes NodesTable) {
+func testNodesTableImpl(t *subcommandstest.TB, cas CasTable, nodes NodesTable) {
 	t.Assertf(len(EnumerateNodesAsList(t, nodes)) == 0, "Found unexpected value")
 
 	tree1 := map[string]string{

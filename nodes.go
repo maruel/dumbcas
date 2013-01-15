@@ -9,8 +9,7 @@ limitations under the License. */
 
 package main
 
-import (
-)
+import ()
 
 type Node struct {
 	Entry   string

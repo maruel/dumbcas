@@ -12,6 +12,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"github.com/maruel/subcommands/subcommandstest"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -24,7 +25,7 @@ import (
 type mockCasTable struct {
 	entries  map[string][]byte
 	needFsck bool
-	t        *TB
+	t        *subcommandstest.TB
 }
 
 func (a *DumbcasAppMock) MakeCasTable(rootDir string) (CasTable, error) {
@@ -35,7 +36,7 @@ func (a *DumbcasAppMock) MakeCasTable(rootDir string) (CasTable, error) {
 }
 
 func (m *mockCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	m.t.log.Printf("mockCasTable.ServeHTTP(%s)", r.URL.Path)
+	m.t.GetLog().Printf("mockCasTable.ServeHTTP(%s)", r.URL.Path)
 	w.Write(m.entries[r.URL.Path[1:]])
 }
 
@@ -47,7 +48,7 @@ func (m *mockCasTable) Enumerate() <-chan EnumerationEntry {
 		keys[i] = k
 		i++
 	}
-	m.t.log.Printf("mockCasTable.Enumerate() %d", len(keys))
+	m.t.GetLog().Printf("mockCasTable.Enumerate() %d", len(keys))
 	c := make(chan EnumerationEntry)
 	go func() {
 		for _, k := range keys {
@@ -59,7 +60,7 @@ func (m *mockCasTable) Enumerate() <-chan EnumerationEntry {
 }
 
 func (m *mockCasTable) AddEntry(source io.Reader, item string) error {
-	m.t.log.Printf("mockCasTable.AddEntry(%s)", item)
+	m.t.GetLog().Printf("mockCasTable.AddEntry(%s)", item)
 	if _, ok := m.entries[item]; ok {
 		return os.ErrExist
 	}
@@ -71,7 +72,7 @@ func (m *mockCasTable) AddEntry(source io.Reader, item string) error {
 }
 
 func (m *mockCasTable) Open(item string) (ReadSeekCloser, error) {
-	m.t.log.Printf("mockCasTable.Open(%s)", item)
+	m.t.GetLog().Printf("mockCasTable.Open(%s)", item)
 	data, ok := m.entries[item]
 	if !ok {
 		return nil, fmt.Errorf("Missing: %s", item)
@@ -80,7 +81,7 @@ func (m *mockCasTable) Open(item string) (ReadSeekCloser, error) {
 }
 
 func (m *mockCasTable) Remove(item string) error {
-	m.t.log.Printf("mockCasTable.Remove(%s)", item)
+	m.t.GetLog().Printf("mockCasTable.Remove(%s)", item)
 	if _, ok := m.entries[item]; !ok {
 		return os.ErrNotExist
 	}
@@ -89,17 +90,17 @@ func (m *mockCasTable) Remove(item string) error {
 }
 
 func (m *mockCasTable) SetFsckBit() {
-	m.t.log.Printf("mockCasTable.SetFsckBit()")
+	m.t.GetLog().Printf("mockCasTable.SetFsckBit()")
 	m.needFsck = true
 }
 
 func (m *mockCasTable) GetFsckBit() bool {
-	m.t.log.Printf("mockCasTable.GetFsckBit() %t", m.needFsck)
+	m.t.GetLog().Printf("mockCasTable.GetFsckBit() %t", m.needFsck)
 	return m.needFsck
 }
 
 func (m *mockCasTable) ClearFsckBit() {
-	m.t.log.Printf("mockCasTable.ClearFsckBit()")
+	m.t.GetLog().Printf("mockCasTable.ClearFsckBit()")
 	m.needFsck = false
 }
 
@@ -113,7 +114,7 @@ func (b Buffer) Close() error {
 }
 
 // Returns a sorted list of all the entries.
-func EnumerateCasAsList(t *TB, cas CasTable) []string {
+func EnumerateCasAsList(t *subcommandstest.TB, cas CasTable) []string {
 	items := []string{}
 	for v := range cas.Enumerate() {
 		t.Assertf(v.Error == nil, "Unexpected failure")
@@ -127,12 +128,12 @@ func EnumerateCasAsList(t *TB, cas CasTable) []string {
 
 func TestCasTableMock(t *testing.T) {
 	t.Parallel()
-	tb := MakeTB(t)
+	tb := subcommandstest.MakeTB(t)
 	cas := &mockCasTable{make(map[string][]byte), false, tb}
 	testCasTableImpl(tb, cas)
 }
 
-func testCasTableImpl(t *TB, cas CasTable) {
+func testCasTableImpl(t *subcommandstest.TB, cas CasTable) {
 	items := EnumerateCasAsList(t, cas)
 	t.Assertf(len(items) == 0, "Found unexpected values: %q", items)
 

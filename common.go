@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/maruel/subcommands"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -46,7 +47,7 @@ type ReadSeekCloser interface {
 
 // Common flags.
 type CommonFlags struct {
-	CommandRunBase
+	subcommands.CommandRunBase
 	Root  string
 	cas   CasTable
 	nodes NodesTable

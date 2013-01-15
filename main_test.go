@@ -10,37 +10,38 @@ limitations under the License. */
 package main
 
 import (
-	"log"
+	"github.com/maruel/subcommands"
+	"github.com/maruel/subcommands/subcommandstest"
 	"testing"
 )
 
+func init() {
+	subcommandstest.DisableLogOutput()
+}
+
 type DumbcasAppMock struct {
-	*ApplicationMock
+	*subcommandstest.ApplicationMock
 	// Statefullness
 	cache *mockCache
 	cas   CasTable
 	nodes NodesTable
 }
 
-func (a *DumbcasAppMock) GetLog() *log.Logger {
-	return a.log
-}
-
 func (a *DumbcasAppMock) Run(args []string, expected int) {
 	a.GetLog().Printf("%s", args)
-	returncode := Run(a, args)
+	returncode := subcommands.Run(a, args)
 	a.Assertf(returncode == expected, "Unexpected return code %d", returncode)
 }
 
 func makeDumbcasAppMock(t *testing.T) *DumbcasAppMock {
-	return &DumbcasAppMock{ApplicationMock: MakeAppMock(t, application)}
+	return &DumbcasAppMock{ApplicationMock: subcommandstest.MakeAppMock(t, application)}
 }
 
 func TestMainHelp(t *testing.T) {
 	t.Parallel()
-	a := MakeAppMock(t, application)
+	a := subcommandstest.MakeAppMock(t, application)
 	args := []string{"help"}
-	r := Run(a, args)
+	r := subcommands.Run(a, args)
 	a.Assertf(r == 0, "Unexpected return code %d", r)
 	a.CheckBuffer(true, false)
 }

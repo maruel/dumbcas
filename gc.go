@@ -11,13 +11,14 @@ package main
 
 import (
 	"fmt"
+	"github.com/maruel/subcommands"
 )
 
-var cmdGc = &Command{
+var cmdGc = &subcommands.Command{
 	UsageLine: "gc",
 	ShortDesc: "moves to trash all objects that are not referenced anymore",
 	LongDesc:  "Scans each node and each entry file to determine if each cas entry is referenced or not.",
-	CommandRun: func() CommandRun {
+	CommandRun: func() subcommands.CommandRun {
 		c := &gcRun{}
 		c.Init()
 		return c
@@ -97,7 +98,7 @@ func (c *gcRun) main(a DumbcasApplication) error {
 	return nil
 }
 
-func (c *gcRun) Run(a Application, args []string) int {
+func (c *gcRun) Run(a subcommands.Application, args []string) int {
 	if len(args) != 0 {
 		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1

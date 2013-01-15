@@ -11,16 +11,17 @@ package main
 
 import (
 	"fmt"
+	"github.com/maruel/subcommands"
 	"log"
 	"net"
 	"net/http"
 )
 
-var cmdWeb = &Command{
+var cmdWeb = &subcommands.Command{
 	UsageLine: "web",
 	ShortDesc: "starts a web service to access the dumbcas",
 	LongDesc:  "Serves each node as a full virtual tree of the archived files.",
-	CommandRun: func() CommandRun {
+	CommandRun: func() subcommands.CommandRun {
 		c := &webRun{}
 		c.Init()
 		c.Flags.IntVar(&c.port, "port", 8010, "port number")
@@ -138,7 +139,7 @@ func (c *webRun) main(d DumbcasApplication, ready chan<- net.Listener) error {
 	return s.Serve(ls)
 }
 
-func (c *webRun) Run(a Application, args []string) int {
+func (c *webRun) Run(a subcommands.Application, args []string) int {
 	if len(args) != 0 {
 		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1

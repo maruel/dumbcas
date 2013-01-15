@@ -10,18 +10,19 @@ limitations under the License. */
 package main
 
 import (
+	"github.com/maruel/subcommands/subcommandstest"
 	"testing"
 )
 
 func TestNodesTable(t *testing.T) {
 	t.Parallel()
-	tb := MakeTB(t)
+	tb := subcommandstest.MakeTB(t)
 	tempData := makeTempDir(tb, "nodes")
 	defer removeTempDir(tempData)
 
 	// Explicitely use a mocked CasTable.
 	cas := &mockCasTable{make(map[string][]byte), false, tb}
-	nodes, err := loadLocalNodesTable(tempData, cas, tb.log)
+	nodes, err := loadLocalNodesTable(tempData, cas, tb.GetLog())
 	tb.Assertf(err == nil, "Unexpected error: %s", err)
 
 	testNodesTableImpl(tb, cas, nodes)

@@ -11,6 +11,7 @@ package main
 
 import (
 	"bytes"
+	"github.com/maruel/subcommands/subcommandstest"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -19,7 +20,7 @@ import (
 )
 
 type mockCache struct {
-	*TB
+	*subcommandstest.TB
 	root     *EntryCache
 	closed   bool
 	creation []byte
@@ -49,8 +50,8 @@ func (a *DumbcasAppMock) LoadCache() (Cache, error) {
 func TestCacheNormal(t *testing.T) {
 	// Just makes sure loading the real cache doesn't crash.
 	t.Parallel()
-	tb := MakeTB(t)
-	cache, err := loadCache(tb.log)
+	tb := subcommandstest.MakeTB(t)
+	cache, err := loadCache(tb.GetLog())
 	tb.Assertf(err == nil, "Oops")
 	defer cache.Close()
 	tb.Assertf(cache.Root() != nil, "Oops")
@@ -58,7 +59,7 @@ func TestCacheNormal(t *testing.T) {
 
 func TestCachePath(t *testing.T) {
 	t.Parallel()
-	tb := MakeTB(t)
+	tb := subcommandstest.MakeTB(t)
 	p, err := getCachePath()
 	tb.Assertf(err == nil, "Oops")
 	tb.Assertf(filepath.IsAbs(p), "Oops")
@@ -66,18 +67,18 @@ func TestCachePath(t *testing.T) {
 
 func TestCacheRedirected(t *testing.T) {
 	t.Parallel()
-	tb := MakeTB(t)
+	tb := subcommandstest.MakeTB(t)
 	tempData := makeTempDir(tb, "cache")
 	defer removeTempDir(tempData)
 	load := func() (Cache, error) {
-		return loadCacheInner(tempData, tb.log)
+		return loadCacheInner(tempData, tb.GetLog())
 	}
 	testCacheImpl(tb, load)
 }
 
 func TestCacheMock(t *testing.T) {
 	t.Parallel()
-	tb := MakeTB(t)
+	tb := subcommandstest.MakeTB(t)
 	// Keep the cache alive, since it's all in-memory.
 	mock := &mockCache{tb, &EntryCache{}, false, nil}
 	load := func() (Cache, error) {
@@ -86,7 +87,7 @@ func TestCacheMock(t *testing.T) {
 	testCacheImpl(tb, load)
 }
 
-func testCacheImpl(t *TB, load func() (Cache, error)) {
+func testCacheImpl(t *subcommandstest.TB, load func() (Cache, error)) {
 	now := time.Now().UTC().Unix()
 	{
 		c, err := load()

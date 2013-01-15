@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/maruel/subcommands"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,11 +23,11 @@ import (
 	"time"
 )
 
-var cmdArchive = &Command{
+var cmdArchive = &subcommands.Command{
 	UsageLine: "archive <.toArchive> -out <out>",
 	ShortDesc: "archive files to a dumbcas archive",
 	LongDesc:  "Archives files listed in <.toArchive> file to a directory in the DumbCas(tm) layout. Files listed may be in relative path or in absolute path and may contain environment variables.",
-	CommandRun: func() CommandRun {
+	CommandRun: func() subcommands.CommandRun {
 		c := &archiveRun{}
 		c.Init()
 		c.Flags.StringVar(&c.comment, "comment", "", "Comment to embed in the file")
@@ -530,7 +531,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 	return nil
 }
 
-func (c *archiveRun) Run(a Application, args []string) int {
+func (c *archiveRun) Run(a subcommands.Application, args []string) int {
 	if len(args) != 1 {
 		fmt.Fprintf(a.GetErr(), "%s: Must only provide a .toArchive file.\n", a.GetName())
 		return 1

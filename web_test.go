@@ -11,6 +11,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/maruel/subcommands"
+	"github.com/maruel/subcommands/subcommandstest"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -37,7 +39,7 @@ func makeWebDumbcasAppMock(t *testing.T) *WebDumbcasAppMock {
 
 func (f *WebDumbcasAppMock) goWeb() {
 	f.Assertf(f.socket == nil, "Socket is empty")
-	cmd := FindCommand(f, "web")
+	cmd := subcommands.FindCommand(f, "web")
 	r := cmd.CommandRun().(*webRun)
 	r.Root = "\\foo"
 	// Simulate -local. It is important to use it while testing otherwise it
@@ -46,13 +48,13 @@ func (f *WebDumbcasAppMock) goWeb() {
 	c := make(chan net.Listener)
 	go func() {
 		err := r.main(f, c)
-		f.log.Printf("Closed: %s", err)
+		f.GetLog().Printf("Closed: %s", err)
 		f.closed <- true
 	}()
-	f.log.Print("Starting")
+	f.GetLog().Print("Starting")
 	f.socket = <-c
 	f.baseUrl = fmt.Sprintf("http://%s", f.socket.Addr().String())
-	f.log.Printf("Started at %s", f.baseUrl)
+	f.GetLog().Printf("Started at %s", f.baseUrl)
 }
 
 func (f *WebDumbcasAppMock) closeWeb() {
@@ -76,14 +78,14 @@ func (f *WebDumbcasAppMock) get404(url string) {
 	f.Assertf(r.StatusCode == 404, "Expected 404, got %d. %s", r.StatusCode, r.Body)
 }
 
-func readBody(t *TB, r *http.Response) string {
+func readBody(t *subcommandstest.TB, r *http.Response) string {
 	bytes, err := ioutil.ReadAll(r.Body)
 	t.Assertf(err == nil, "Oops: %s", err)
 	r.Body.Close()
 	return string(bytes)
 }
 
-func expectedBody(t *TB, r *http.Response, expected string) {
+func expectedBody(t *subcommandstest.TB, r *http.Response, expected string) {
 	actual := readBody(t, r)
 	t.Assertf(actual == expected, "%v != %v", expected, actual)
 }
@@ -91,7 +93,7 @@ func expectedBody(t *TB, r *http.Response, expected string) {
 func TestWeb(t *testing.T) {
 	t.Parallel()
 	f := makeWebDumbcasAppMock(t)
-	cmd := FindCommand(f, "web")
+	cmd := subcommands.FindCommand(f, "web")
 	f.Assertf(cmd != nil, "Failed to find 'web'")
 	run := cmd.CommandRun().(*webRun)
 	// Sets -root to an invalid non-empty string.
@@ -109,14 +111,14 @@ func TestWeb(t *testing.T) {
 	sha1tree, nodeName, sha1 := archiveData(f.TB, f.cas, f.nodes, tree1)
 	nodeName = strings.Replace(nodeName, string(filepath.Separator), "/", -1)
 
-	f.log.Print("T: Serve over web and verify files are accessible.")
+	f.GetLog().Print("T: Serve over web and verify files are accessible.")
 	f.goWeb()
-	f.log.Print("T: Make sure it gets a redirect.", sha1, nodeName)
+	f.GetLog().Print("T: Make sure it gets a redirect.", sha1, nodeName)
 	r := f.get("/content/retrieve/nodes", "/content/retrieve/nodes/")
 	month := time.Now().UTC().Format("2006-01")
 	expected := fmt.Sprintf("<html><body><pre><a href=\"%s/\">%s/</a>\n<a href=\"tags/\">tags/</a>\n</pre></body></html>", month, month)
 	expectedBody(f.TB, r, expected)
-	f.log.Print("T: Get the directory.")
+	f.GetLog().Print("T: Get the directory.")
 	r = f.get("/content/retrieve/nodes/"+month, "/content/retrieve/nodes/"+month+"/")
 	actual := readBody(f.TB, r)
 	re := regexp.MustCompile("\\\"(.*)\\\"")
@@ -124,7 +126,7 @@ func TestWeb(t *testing.T) {
 	f.Assertf(len(nodeItems) == 2, "%s", actual)
 	f.Assertf(month+"/"+nodeItems[1] == nodeName, "Unexpected grep: %s", nodeName)
 
-	f.log.Print("T: Get the node.")
+	f.GetLog().Print("T: Get the node.")
 	r = f.get("/content/retrieve/nodes/"+nodeName, "/content/retrieve/nodes/"+nodeName+"/")
 	expected = "<html><body><pre><a href=\"dir1/\">dir1/</a>\n<a href=\"file1\">file1</a>\n</pre></body></html>"
 	expectedBody(f.TB, r, expected)

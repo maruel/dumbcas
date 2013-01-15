@@ -11,14 +11,15 @@ package main
 
 import (
 	"fmt"
+	"github.com/maruel/subcommands"
 	"regexp"
 )
 
-var cmdFsck = &Command{
+var cmdFsck = &subcommands.Command{
 	UsageLine: "fsck",
 	ShortDesc: "moves to trash all objects that are not valid content anymore",
 	LongDesc:  "Recalculate the sha-1 of each dumbcas entry and remove any that are corrupted",
-	CommandRun: func() CommandRun {
+	CommandRun: func() subcommands.CommandRun {
 		c := &fsckRun{}
 		c.Init()
 		return c
@@ -107,7 +108,7 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 	return nil
 }
 
-func (c *fsckRun) Run(a Application, args []string) int {
+func (c *fsckRun) Run(a subcommands.Application, args []string) int {
 	if len(args) != 0 {
 		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1

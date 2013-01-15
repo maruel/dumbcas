@@ -155,17 +155,42 @@ func (c *casTable) Enumerate() <-chan EnumerationEntry {
 // a performance optimization to be able to not write the object unless needed.
 func (c *casTable) AddEntry(source io.Reader, hash string) error {
 	dst := c.filePath(hash)
+	// Temporarilly disable ECC.
+	var dfEcc io.Writer = nil
+	if false {
+		dfEcc, err := os.OpenFile(dst+".ecc", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0640)
+		if err != nil && !os.IsExist(err) {
+			return fmt.Errorf("Failed to create the ecc file for %s: %s", dst, err)
+		}
+		if dfEcc != nil {
+			defer dfEcc.Close()
+		}
+	}
 	df, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0640)
-	if os.IsExist(err) {
+	if err != nil && !os.IsExist(err) {
+		return fmt.Errorf("Failed to create the file %s: %s", dst, err)
+	}
+	if df != nil {
+		defer df.Close()
+	}
+	if dfEcc == nil && df == nil {
+		// Both exist, nothing to do. err == os.ErrExist.
 		return err
 	}
-	if err != nil {
-		return fmt.Errorf("Failed to copy(dst) %s: %s", dst, err)
+
+	var out io.Writer
+	if dfEcc == nil {
+		out = df
+	} else {
+		/*
+		   out = NewECC(dfEcc)
+		   if df != nil {
+		     // Both are missing.
+		     source = io.TeeReader(source, df)
+		   }
+		*/
 	}
-	defer func() {
-		_ = df.Close()
-	}()
-	_, err = io.Copy(df, source)
+	_, err = io.Copy(out, source)
 	return err
 }
 

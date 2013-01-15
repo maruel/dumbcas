@@ -26,6 +26,7 @@ import (
 	"time"
 )
 
+// Used in tests as an in-memory NodesTable implementation.
 type mockNodesTable struct {
 	entries map[string][]byte
 	cas     CasTable
@@ -170,19 +171,6 @@ func EnumerateNodesAsList(t *TB, nodes NodesTable) []string {
 	}
 	sort.Strings(items)
 	return items
-}
-
-func TestNodesTable(t *testing.T) {
-	t.Parallel()
-	tb := MakeTB(t)
-	tempData := makeTempDir(tb, "nodes")
-	defer removeTempDir(tempData)
-
-	cas := &mockCasTable{make(map[string][]byte), false, tb}
-	nodes, err := loadNodesTable(tempData, cas, tb.log)
-	tb.Assertf(err == nil, "Unexpected error: %s", err)
-
-	testNodesTableImpl(tb, cas, nodes)
 }
 
 func TestNodesTableMock(t *testing.T) {

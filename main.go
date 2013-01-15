@@ -53,7 +53,7 @@ func (d *dumbapp) MakeCasTable(rootDir string) (CasTable, error) {
 }
 
 func (d *dumbapp) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
-	return loadNodesTable(rootDir, cas, d.GetLog())
+	return loadLocalNodesTable(rootDir, cas, d.GetLog())
 }
 
 func main() {

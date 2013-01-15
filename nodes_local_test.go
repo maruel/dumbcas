@@ -10,15 +10,19 @@ limitations under the License. */
 package main
 
 import (
+	"testing"
 )
 
-type Node struct {
-	Entry   string
-	Comment string `json:",omitempty"`
-}
+func TestNodesTable(t *testing.T) {
+	t.Parallel()
+	tb := MakeTB(t)
+	tempData := makeTempDir(tb, "nodes")
+	defer removeTempDir(tempData)
 
-type NodesTable interface {
-	Table
-	// Adds a node to the table.
-	AddEntry(node *Node, name string) (string, error)
+	// Explicitely use a mocked CasTable.
+	cas := &mockCasTable{make(map[string][]byte), false, tb}
+	nodes, err := loadLocalNodesTable(tempData, cas, tb.log)
+	tb.Assertf(err == nil, "Unexpected error: %s", err)
+
+	testNodesTableImpl(tb, cas, nodes)
 }

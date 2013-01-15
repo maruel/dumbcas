@@ -49,7 +49,7 @@ func (d *dumbapp) LoadCache() (Cache, error) {
 }
 
 func (d *dumbapp) MakeCasTable(rootDir string) (CasTable, error) {
-	return makeCasTable(rootDir)
+	return makeLocalCasTable(rootDir)
 }
 
 func (d *dumbapp) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {

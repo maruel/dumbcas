@@ -20,6 +20,7 @@ import (
 	"testing"
 )
 
+// Used in test as a local in-memory CAS.
 type mockCasTable struct {
 	entries  map[string][]byte
 	needFsck bool
@@ -27,7 +28,6 @@ type mockCasTable struct {
 }
 
 func (a *DumbcasAppMock) MakeCasTable(rootDir string) (CasTable, error) {
-	//return makeCasTable(rootDir)
 	if a.cas == nil {
 		a.cas = &mockCasTable{make(map[string][]byte), false, a.TB}
 	}
@@ -125,42 +125,7 @@ func EnumerateCasAsList(t *TB, cas CasTable) []string {
 	return items
 }
 
-func TestPrefixSpace(t *testing.T) {
-	t.Parallel()
-	tb := MakeTB(t)
-	type S struct {
-		i int
-		s string
-	}
-	checks := map[int]S{
-		0: S{0, ""},
-		1: S{16, "f"},
-		2: S{256, "ff"},
-		3: S{4096, "fff"},
-		4: S{65536, "ffff"},
-	}
-	for prefixLength, s := range checks {
-		x := prefixSpace(uint(prefixLength))
-		tb.Assertf(x == s.i, "%d: %d != %d", prefixLength, x, s.i)
-		if x != 0 {
-			res := fmt.Sprintf("%0*x", prefixLength, x-1)
-			tb.Assertf(res == s.s, "%d: %s != %s", prefixLength, res, s.s)
-		}
-	}
-}
-
-func TestCasTableImpl(t *testing.T) {
-	t.Parallel()
-	tb := MakeTB(t)
-	tempData := makeTempDir(tb, "cas")
-	defer removeTempDir(tempData)
-
-	cas, err := makeCasTable(tempData)
-	tb.Assertf(err == nil, "Unexpected error: %s", err)
-	testCasTableImpl(tb, cas)
-}
-
-func TestCasTableNode(t *testing.T) {
+func TestCasTableMock(t *testing.T) {
 	t.Parallel()
 	tb := MakeTB(t)
 	cas := &mockCasTable{make(map[string][]byte), false, tb}

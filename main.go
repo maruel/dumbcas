@@ -24,6 +24,7 @@ var application = &subcommands.DefaultApplication{
 		cmdFsck,
 		cmdGc,
 		subcommands.CmdHelp,
+		cmdRestore,
 		cmdVersion,
 		cmdWeb,
 	},

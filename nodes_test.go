@@ -35,7 +35,6 @@ type fakeNodesTable struct {
 }
 
 func (a *DumbcasAppMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
-	//return loadNodesTable(rootDir, cas, a.GetLog())
 	if a.nodes == nil {
 		a.nodes = &fakeNodesTable{make(map[string][]byte), a.cas, a.TB}
 	}

@@ -24,7 +24,7 @@ import (
 )
 
 var cmdArchive = &subcommands.Command{
-	UsageLine: "archive <.toArchive> -out <out>",
+	UsageLine: "archive <.toArchive>",
 	ShortDesc: "archive files to a dumbcas archive",
 	LongDesc:  "Archives files listed in <.toArchive> file to a directory in the DumbCas(tm) layout. Files listed may be in relative path or in absolute path and may contain environment variables.",
 	CommandRun: func() subcommands.CommandRun {

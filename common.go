@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 )
 
+// Table represents a flag table of data.
 type Table interface {
 	// Must be able to efficiently respond to an HTTP GET request.
 	http.Handler
@@ -48,7 +49,8 @@ type ReadSeekCloser interface {
 // Common flags.
 type CommonFlags struct {
 	subcommands.CommandRunBase
-	Root  string
+	Root string
+	// These are not "flags" per se but are created indirectly by the -root flag.
 	cas   CasTable
 	nodes NodesTable
 }

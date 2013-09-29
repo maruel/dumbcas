@@ -23,6 +23,7 @@ import (
 	"time"
 )
 
+// Starts the web server in a separate threads and looks for expected results.
 type WebDumbcasAppMock struct {
 	*DumbcasAppMock
 	socket  net.Listener
@@ -113,6 +114,7 @@ func TestWeb(t *testing.T) {
 
 	f.GetLog().Print("T: Serve over web and verify files are accessible.")
 	f.goWeb()
+	defer f.closeWeb()
 	f.GetLog().Print("T: Make sure it gets a redirect.", sha1, nodeName)
 	r := f.get("/content/retrieve/nodes", "/content/retrieve/nodes/")
 	month := time.Now().UTC().Format("2006-01")
@@ -137,6 +139,4 @@ func TestWeb(t *testing.T) {
 	expectedBody(f.TB, r, "content1")
 	r = f.get("/content/retrieve/nodes/"+nodeName+"/dir1/dir2/file2", "")
 	expectedBody(f.TB, r, "content2")
-
-	f.closeWeb()
 }

@@ -19,10 +19,11 @@ func init() {
 	subcommandstest.DisableLogOutput()
 }
 
+// Creates a copy of the application so it can be tested concurrently.
 type DumbcasAppMock struct {
 	*subcommandstest.ApplicationMock
 	// Statefullness
-	cache *mockCache
+	cache *fakeCache
 	cas   CasTable
 	nodes NodesTable
 }

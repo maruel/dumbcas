@@ -20,8 +20,8 @@ func TestNodesTable(t *testing.T) {
 	tempData := makeTempDir(tb, "nodes")
 	defer removeTempDir(tempData)
 
-	// Explicitely use a mocked CasTable.
-	cas := &mockCasTable{make(map[string][]byte), false, tb}
+	// Explicitely use a fake in-memory CasTable.
+	cas := &fakeCasTable{make(map[string][]byte), false, tb}
 	nodes, err := loadLocalNodesTable(tempData, cas, tb.GetLog())
 	tb.Assertf(err == nil, "Unexpected error: %s", err)
 

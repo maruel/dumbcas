@@ -19,19 +19,21 @@ import (
 	"time"
 )
 
-type mockCache struct {
+// A working Cache implementation that is very simple and keeps everything in
+// memory.
+type fakeCache struct {
 	*subcommandstest.TB
 	root     *EntryCache
 	closed   bool
 	creation []byte
 }
 
-func (c *mockCache) Root() *EntryCache {
+func (c *fakeCache) Root() *EntryCache {
 	c.Assertf(c.closed == false, "Was unexpectedly closed")
 	return c.root
 }
 
-func (c *mockCache) Close() {
+func (c *fakeCache) Close() {
 	c.Assertf(c.closed == false, "Was unexpectedly closed")
 	c.closed = false
 }
@@ -39,7 +41,7 @@ func (c *mockCache) Close() {
 func (a *DumbcasAppMock) LoadCache() (Cache, error) {
 	//return loadCache()
 	if a.cache == nil {
-		a.cache = &mockCache{a.TB, &EntryCache{}, false, debug.Stack()}
+		a.cache = &fakeCache{a.TB, &EntryCache{}, false, debug.Stack()}
 	} else {
 		a.Assertf(a.cache.closed == true, "Was not closed properly; %s", a.cache.creation)
 		a.cache.closed = false
@@ -76,13 +78,13 @@ func TestCacheRedirected(t *testing.T) {
 	testCacheImpl(tb, load)
 }
 
-func TestCacheMock(t *testing.T) {
+func TestFakeCache(t *testing.T) {
 	t.Parallel()
 	tb := subcommandstest.MakeTB(t)
 	// Keep the cache alive, since it's all in-memory.
-	mock := &mockCache{tb, &EntryCache{}, false, nil}
+	fake := &fakeCache{tb, &EntryCache{}, false, nil}
 	load := func() (Cache, error) {
-		return mock, nil
+		return fake, nil
 	}
 	testCacheImpl(tb, load)
 }

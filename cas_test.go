@@ -21,8 +21,8 @@ import (
 	"testing"
 )
 
-// Used in test as a local in-memory CAS.
-type mockCasTable struct {
+// A working CasTable implementation that keeps all the data in memory.
+type fakeCasTable struct {
 	entries  map[string][]byte
 	needFsck bool
 	t        *subcommandstest.TB
@@ -30,17 +30,17 @@ type mockCasTable struct {
 
 func (a *DumbcasAppMock) MakeCasTable(rootDir string) (CasTable, error) {
 	if a.cas == nil {
-		a.cas = &mockCasTable{make(map[string][]byte), false, a.TB}
+		a.cas = &fakeCasTable{make(map[string][]byte), false, a.TB}
 	}
 	return a.cas, nil
 }
 
-func (m *mockCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	m.t.GetLog().Printf("mockCasTable.ServeHTTP(%s)", r.URL.Path)
+func (m *fakeCasTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m.t.GetLog().Printf("fakeCasTable.ServeHTTP(%s)", r.URL.Path)
 	w.Write(m.entries[r.URL.Path[1:]])
 }
 
-func (m *mockCasTable) Enumerate() <-chan EnumerationEntry {
+func (m *fakeCasTable) Enumerate() <-chan EnumerationEntry {
 	// First make a copy of the keys.
 	keys := make([]string, len(m.entries))
 	i := 0
@@ -48,7 +48,7 @@ func (m *mockCasTable) Enumerate() <-chan EnumerationEntry {
 		keys[i] = k
 		i++
 	}
-	m.t.GetLog().Printf("mockCasTable.Enumerate() %d", len(keys))
+	m.t.GetLog().Printf("fakeCasTable.Enumerate() %d", len(keys))
 	c := make(chan EnumerationEntry)
 	go func() {
 		for _, k := range keys {
@@ -59,8 +59,8 @@ func (m *mockCasTable) Enumerate() <-chan EnumerationEntry {
 	return c
 }
 
-func (m *mockCasTable) AddEntry(source io.Reader, item string) error {
-	m.t.GetLog().Printf("mockCasTable.AddEntry(%s)", item)
+func (m *fakeCasTable) AddEntry(source io.Reader, item string) error {
+	m.t.GetLog().Printf("fakeCasTable.AddEntry(%s)", item)
 	if _, ok := m.entries[item]; ok {
 		return os.ErrExist
 	}
@@ -71,8 +71,8 @@ func (m *mockCasTable) AddEntry(source io.Reader, item string) error {
 	return err
 }
 
-func (m *mockCasTable) Open(item string) (ReadSeekCloser, error) {
-	m.t.GetLog().Printf("mockCasTable.Open(%s)", item)
+func (m *fakeCasTable) Open(item string) (ReadSeekCloser, error) {
+	m.t.GetLog().Printf("fakeCasTable.Open(%s)", item)
 	data, ok := m.entries[item]
 	if !ok {
 		return nil, fmt.Errorf("Missing: %s", item)
@@ -80,8 +80,8 @@ func (m *mockCasTable) Open(item string) (ReadSeekCloser, error) {
 	return Buffer{bytes.NewReader(data)}, nil
 }
 
-func (m *mockCasTable) Remove(item string) error {
-	m.t.GetLog().Printf("mockCasTable.Remove(%s)", item)
+func (m *fakeCasTable) Remove(item string) error {
+	m.t.GetLog().Printf("fakeCasTable.Remove(%s)", item)
 	if _, ok := m.entries[item]; !ok {
 		return os.ErrNotExist
 	}
@@ -89,18 +89,18 @@ func (m *mockCasTable) Remove(item string) error {
 	return nil
 }
 
-func (m *mockCasTable) SetFsckBit() {
-	m.t.GetLog().Printf("mockCasTable.SetFsckBit()")
+func (m *fakeCasTable) SetFsckBit() {
+	m.t.GetLog().Printf("fakeCasTable.SetFsckBit()")
 	m.needFsck = true
 }
 
-func (m *mockCasTable) GetFsckBit() bool {
-	m.t.GetLog().Printf("mockCasTable.GetFsckBit() %t", m.needFsck)
+func (m *fakeCasTable) GetFsckBit() bool {
+	m.t.GetLog().Printf("fakeCasTable.GetFsckBit() %t", m.needFsck)
 	return m.needFsck
 }
 
-func (m *mockCasTable) ClearFsckBit() {
-	m.t.GetLog().Printf("mockCasTable.ClearFsckBit()")
+func (m *fakeCasTable) ClearFsckBit() {
+	m.t.GetLog().Printf("fakeCasTable.ClearFsckBit()")
 	m.needFsck = false
 }
 
@@ -126,10 +126,10 @@ func EnumerateCasAsList(t *subcommandstest.TB, cas CasTable) []string {
 	return items
 }
 
-func TestCasTableMock(t *testing.T) {
+func TestFakeCasTable(t *testing.T) {
 	t.Parallel()
 	tb := subcommandstest.MakeTB(t)
-	cas := &mockCasTable{make(map[string][]byte), false, tb}
+	cas := &fakeCasTable{make(map[string][]byte), false, tb}
 	testCasTableImpl(tb, cas)
 }
 

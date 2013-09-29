@@ -27,8 +27,8 @@ import (
 	"time"
 )
 
-// Used in tests as an in-memory NodesTable implementation.
-type mockNodesTable struct {
+// A working NodesTable implementation that keeps data in memory.
+type fakeNodesTable struct {
 	entries map[string][]byte
 	cas     CasTable
 	t       *subcommandstest.TB
@@ -37,16 +37,16 @@ type mockNodesTable struct {
 func (a *DumbcasAppMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
 	//return loadNodesTable(rootDir, cas, a.GetLog())
 	if a.nodes == nil {
-		a.nodes = &mockNodesTable{make(map[string][]byte), a.cas, a.TB}
+		a.nodes = &fakeNodesTable{make(map[string][]byte), a.cas, a.TB}
 	}
 	return a.nodes, nil
 }
 
-func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	m.t.GetLog().Printf("mockNodesTable.ServeHTTP(%s)", r.URL.Path)
+func (m *fakeNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m.t.GetLog().Printf("fakeNodesTable.ServeHTTP(%s)", r.URL.Path)
 	suburl := r.URL.Path[1:]
 	if suburl != "" {
-		// Slow search, it's fine for a mock.
+		// Slow search, it's fine for a fake.
 		for k, v := range m.entries {
 			k = strings.Replace(k, string(filepath.Separator), "/", -1)
 			if strings.HasPrefix(suburl, k) {
@@ -93,7 +93,7 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(items) != 0 {
 		if needRedirect {
-			// Not strictly valid but fine enough for a mock.
+			// Not strictly valid but fine enough for a fake.
 			localRedirect(w, r, path.Base(r.URL.Path)+"/")
 			return
 		}
@@ -103,8 +103,8 @@ func (m *mockNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Yo dawg", http.StatusNotFound)
 }
 
-func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
-	m.t.GetLog().Printf("mockNodesTable.AddEntry(%s)", name)
+func (m *fakeNodesTable) AddEntry(node *Node, name string) (string, error) {
+	m.t.GetLog().Printf("fakeNodesTable.AddEntry(%s)", name)
 	data, err := json.Marshal(node)
 	if err != nil {
 		return "", fmt.Errorf("Failed to marshall internal state: %s", err)
@@ -133,8 +133,8 @@ func (m *mockNodesTable) AddEntry(node *Node, name string) (string, error) {
 	return nodePath, nil
 }
 
-func (m *mockNodesTable) Enumerate() <-chan EnumerationEntry {
-	m.t.GetLog().Printf("mockNodesTable.Enumerate() %d", len(m.entries))
+func (m *fakeNodesTable) Enumerate() <-chan EnumerationEntry {
+	m.t.GetLog().Printf("fakeNodesTable.Enumerate() %d", len(m.entries))
 	c := make(chan EnumerationEntry)
 	go func() {
 		// TODO(maruel): Will blow up if mutated concurrently.
@@ -146,8 +146,8 @@ func (m *mockNodesTable) Enumerate() <-chan EnumerationEntry {
 	return c
 }
 
-func (m *mockNodesTable) Open(item string) (ReadSeekCloser, error) {
-	m.t.GetLog().Printf("mockNodesTable.Open(%s)", item)
+func (m *fakeNodesTable) Open(item string) (ReadSeekCloser, error) {
+	m.t.GetLog().Printf("fakeNodesTable.Open(%s)", item)
 	data, ok := m.entries[item]
 	if !ok {
 		return nil, fmt.Errorf("Missing: %s", item)
@@ -155,7 +155,7 @@ func (m *mockNodesTable) Open(item string) (ReadSeekCloser, error) {
 	return Buffer{bytes.NewReader(data)}, nil
 }
 
-func (m *mockNodesTable) Remove(name string) error {
+func (m *fakeNodesTable) Remove(name string) error {
 	if _, ok := m.entries[name]; !ok {
 		return os.ErrNotExist
 	}
@@ -174,11 +174,11 @@ func EnumerateNodesAsList(t *subcommandstest.TB, nodes NodesTable) []string {
 	return items
 }
 
-func TestNodesTableMock(t *testing.T) {
+func TestFakeNodesTable(t *testing.T) {
 	t.Parallel()
 	tb := subcommandstest.MakeTB(t)
-	cas := &mockCasTable{make(map[string][]byte), false, tb}
-	nodes := &mockNodesTable{make(map[string][]byte), cas, tb}
+	cas := &fakeCasTable{make(map[string][]byte), false, tb}
+	nodes := &fakeNodesTable{make(map[string][]byte), cas, tb}
 	testNodesTableImpl(tb, cas, nodes)
 }
 

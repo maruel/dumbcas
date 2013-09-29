@@ -36,8 +36,8 @@ func TestFsckCorruptCasFile(t *testing.T) {
 	})
 
 	// Corrupt an item in CasTable.
-	casMock := f.cas.(*mockCasTable)
-	casMock.entries[sha1String("content1")] = []byte("content5")
+	cas := f.cas.(*fakeCasTable)
+	cas.entries[sha1String("content1")] = []byte("content5")
 	f.Run(args, 0)
 
 	// One entry disapeared. I hope you had a valid secondary copy of your
@@ -65,8 +65,8 @@ func TestFsckCorruptNodeEntry(t *testing.T) {
 	})
 
 	// Corrupt an item in NodesTable.
-	nodesMock := f.nodes.(*mockNodesTable)
-	nodesMock.entries["tags/fictious"] = []byte("Invalid Json")
+	nodes := f.nodes.(*fakeNodesTable)
+	nodes.entries["tags/fictious"] = []byte("Invalid Json")
 	f.Run(args, 0)
 
 	i1 := EnumerateCasAsList(f.TB, f.cas)

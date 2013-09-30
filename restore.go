@@ -105,7 +105,7 @@ func (c *restoreRun) main(a DumbcasApplication, nodeArg string) error {
 	}
 	// TODO(maruel): Progress bar.
 	count, err := restoreEntry(a.GetLog(), c.cas, entry, c.Out)
-	fmt.Fprintf(a.GetOut(), "Restored %d files in %s", count, c.Out)
+	fmt.Fprintf(a.GetOut(), "Restored %d files in %s\n", count, c.Out)
 	return err
 }
 

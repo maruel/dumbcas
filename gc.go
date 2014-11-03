@@ -12,6 +12,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/maruel/dumbcas/dumbcaslib"
 	"github.com/maruel/subcommands"
 )
 
@@ -30,12 +31,12 @@ type gcRun struct {
 	CommonFlags
 }
 
-func TagRecurse(entries map[string]bool, entry *Entry) {
+func tagRecurse(entries map[string]bool, entry *dumbcaslib.Entry) {
 	if entry.Sha1 != "" {
 		entries[entry.Sha1] = true
 	}
 	for _, i := range entry.Files {
-		TagRecurse(entries, i)
+		tagRecurse(entries, i)
 	}
 }
 
@@ -70,19 +71,19 @@ func (c *gcRun) main(a DumbcasApplication) error {
 		defer func() {
 			_ = f.Close()
 		}()
-		node := &Node{}
-		if err := loadReaderAsJson(f, node); err != nil {
+		node := &dumbcaslib.Node{}
+		if err := dumbcaslib.LoadReaderAsJSON(f, node); err != nil {
 			// TODO(maruel): Leaks channel.
 			c.cas.SetFsckBit()
 			return fmt.Errorf("Failed opening node %s: %s", item.Item, err)
 		}
 
 		entries[node.Entry] = true
-		entry, err := LoadEntry(c.cas, node.Entry)
+		entry, err := dumbcaslib.LoadEntry(c.cas, node.Entry)
 		if err != nil {
 			return err
 		}
-		TagRecurse(entries, entry)
+		tagRecurse(entries, entry)
 	}
 
 	orphans := []string{}

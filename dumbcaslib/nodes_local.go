@@ -7,14 +7,13 @@ an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied. See the License for the specific language governing permissions and
 limitations under the License. */
 
-package main
+package dumbcaslib
 
 import (
 	"encoding/json"
 	"fmt"
 	"html"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path"
@@ -39,8 +38,7 @@ type nodesTable struct {
 	cas      CasTable
 	maxItems int
 	hostname string
-	log      *log.Logger
-	trash    Trash
+	trash    trash
 
 	mutex         sync.Mutex
 	recentNodes   map[string]*nodeCache
@@ -53,11 +51,13 @@ type nodeCache struct {
 }
 
 type entryCache struct {
-	EntryFileSystem
+	entryFileSystem
 	lastAccess time.Time
 }
 
-func loadLocalNodesTable(rootDir string, cas CasTable, log *log.Logger) (NodesTable, error) {
+// LoadLocalNodesTable returns a NodesTable rooted at rootDir using CasTable as
+// its data source.
+func LoadLocalNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
 	nodesDir := filepath.Join(rootDir, nodesName)
 	if err := os.Mkdir(nodesDir, 0750); err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("LoadNodesTable(%s): Failed to create %s: %s\n", rootDir, nodesDir, err)
@@ -73,8 +73,7 @@ func loadLocalNodesTable(rootDir string, cas CasTable, log *log.Logger) (NodesTa
 		cas:           cas,
 		maxItems:      10,
 		hostname:      hostname,
-		log:           log,
-		trash:         MakeTrash(nodesDir),
+		trash:         makeTrash(nodesDir),
 		recentNodes:   map[string]*nodeCache{},
 		recentEntries: map[string]*entryCache{},
 	}, nil
@@ -104,14 +103,13 @@ func (n *nodesTable) AddEntry(node *Node, name string) (string, error) {
 		f, err := os.OpenFile(nodePath, os.O_WRONLY|os.O_EXCL|os.O_CREATE, 0640)
 		if err != nil {
 			// Try ad nauseam.
-			suffix += 1
+			suffix++
 		} else {
 			if _, err = f.Write(data); err != nil {
 				_ = f.Close()
 				return "", fmt.Errorf("Failed to write %s: %s", f.Name(), err)
 			}
 			_ = f.Close()
-			n.log.Printf("Saved node: %s", filepath.Join(monthName, nodeName))
 			break
 		}
 	}
@@ -170,7 +168,7 @@ func (n *nodesTable) Enumerate() <-chan EnumerationEntry {
 					continue
 				}
 				relPath := v.FullPath[len(n.nodesDir)+1:]
-				if filepath.Base(relPath) == TrashName {
+				if filepath.Base(relPath) == trashName {
 					// TODO(maruel): Cancel iterating inside the directory!
 					continue
 				}
@@ -184,7 +182,7 @@ func (n *nodesTable) Enumerate() <-chan EnumerationEntry {
 
 func (n *nodesTable) Remove(name string) error {
 	// TODO(maruel): Remove empty directories.
-	return n.trash.Move(name)
+	return n.trash.move(name)
 }
 
 // LoadEntry is an utility functiont that loads an node stored in the CasTable
@@ -199,7 +197,7 @@ func LoadEntry(cas CasTable, hash string) (*Entry, error) {
 		_ = f.Close()
 	}()
 	entry := &Entry{}
-	if err := loadReaderAsJson(f, entry); err != nil {
+	if err := LoadReaderAsJSON(f, entry); err != nil {
 		cas.SetFsckBit()
 		return nil, fmt.Errorf("Failed reading entry %s", hash)
 	}
@@ -248,14 +246,13 @@ func (n *nodesTable) getNode(url string) (*Node, string, error) {
 		}
 		if !stat.IsDir() {
 			node := &nodeCache{}
-			if err := loadReaderAsJson(f, &node.Node); err == nil {
+			if err := LoadReaderAsJSON(f, &node.Node); err == nil {
 				node.lastAccess = time.Now()
 				// Note that prefix is using "/" as path separator.
 				go n.updateNodeCache(prefix, node)
 				return &node.Node, rest, err
-			} else {
-				return nil, "", err
 			}
+			return nil, "", err
 		}
 	}
 	// No error, didn't find anything.
@@ -305,7 +302,7 @@ func (n *nodesTable) getEntry(entryName string) (*entryCache, error) {
 	n.mutex.Unlock()
 
 	// Create a new entry without the lock.
-	entryObj := &entryCache{EntryFileSystem: EntryFileSystem{cas: n.cas}}
+	entryObj := &entryCache{entryFileSystem: entryFileSystem{cas: n.cas}}
 	f, err := n.cas.Open(entryName)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to load the entry file: %s", err)
@@ -313,7 +310,7 @@ func (n *nodesTable) getEntry(entryName string) (*entryCache, error) {
 	defer func() {
 		_ = f.Close()
 	}()
-	if err := loadReaderAsJson(f, &entryObj.entry); err != nil {
+	if err := LoadReaderAsJSON(f, &entryObj.entry); err != nil {
 		return nil, err
 	}
 	go n.updateEntryCache(entryName, entryObj)
@@ -395,7 +392,7 @@ func (n *nodesTable) corruption(w http.ResponseWriter, format string, a ...inter
 	http.Error(w, "Internal failure: "+str, http.StatusNotImplemented)
 }
 
-// Converts the Node request to a EntryFileSystem request. This loads the entry
+// Converts the Node request to a entryFileSystem request. This loads the entry
 // file and redirects to its virtual file system.
 func (n *nodesTable) serveObj(w http.ResponseWriter, r *http.Request, node *Node) {
 	entryFs, err := n.getEntry(node.Entry)

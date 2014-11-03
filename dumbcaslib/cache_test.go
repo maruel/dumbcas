@@ -7,55 +7,22 @@ an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied. See the License for the specific language governing permissions and
 limitations under the License. */
 
-package main
+package dumbcaslib
 
 import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"testing"
 	"time"
 
-	"github.com/maruel/subcommands/subcommandstest"
 	"github.com/maruel/ut"
 )
-
-// A working Cache implementation that is very simple and keeps everything in
-// memory.
-type fakeCache struct {
-	*subcommandstest.TB
-	root     *EntryCache
-	closed   bool
-	creation []byte
-}
-
-func (c *fakeCache) Root() *EntryCache {
-	ut.AssertEqualf(c, c.closed, false, "Was unexpectedly closed")
-	return c.root
-}
-
-func (c *fakeCache) Close() {
-	ut.AssertEqualf(c, c.closed, false, "Was unexpectedly closed")
-	c.closed = false
-}
-
-func (a *DumbcasAppMock) LoadCache() (Cache, error) {
-	//return loadCache()
-	if a.cache == nil {
-		a.cache = &fakeCache{a.TB, &EntryCache{}, false, debug.Stack()}
-	} else {
-		ut.AssertEqualf(a.TB, true, a.cache.closed, "Was not closed properly; %s", a.cache.creation)
-		a.cache.closed = false
-	}
-	return a.cache, nil
-}
 
 func TestCacheNormal(t *testing.T) {
 	// Just makes sure loading the real cache doesn't crash.
 	t.Parallel()
-	tb := subcommandstest.MakeTB(t)
-	cache, err := loadCache(tb.GetLog())
+	cache, err := LoadCache()
 	ut.AssertEqual(t, nil, err)
 	defer cache.Close()
 	ut.AssertEqual(t, false, nil == cache.Root())
@@ -70,27 +37,25 @@ func TestCachePath(t *testing.T) {
 
 func TestCacheRedirected(t *testing.T) {
 	t.Parallel()
-	tb := subcommandstest.MakeTB(t)
-	tempData := makeTempDir(tb, "cache")
-	defer removeTempDir(tempData)
+	tempData := makeTempDir(t, "cache")
+	defer removeDir(t, tempData)
 	load := func() (Cache, error) {
-		return loadCacheInner(tempData, tb.GetLog())
+		return loadCacheInner(tempData)
 	}
-	testCacheImpl(tb, load)
+	testCacheImpl(t, load)
 }
 
 func TestFakeCache(t *testing.T) {
 	t.Parallel()
-	tb := subcommandstest.MakeTB(t)
 	// Keep the cache alive, since it's all in-memory.
-	fake := &fakeCache{tb, &EntryCache{}, false, nil}
+	fake := MakeMemoryCache()
 	load := func() (Cache, error) {
 		return fake, nil
 	}
-	testCacheImpl(tb, load)
+	testCacheImpl(t, load)
 }
 
-func testCacheImpl(t *subcommandstest.TB, load func() (Cache, error)) {
+func testCacheImpl(t testing.TB, load func() (Cache, error)) {
 	now := time.Now().UTC().Unix()
 	{
 		c, err := load()

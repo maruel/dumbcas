@@ -30,7 +30,7 @@ type WebDumbcasAppMock struct {
 	*DumbcasAppMock
 	socket  net.Listener
 	closed  chan bool
-	baseUrl string
+	baseURL string
 }
 
 func makeWebDumbcasAppMock(t *testing.T) *WebDumbcasAppMock {
@@ -56,27 +56,27 @@ func (f *WebDumbcasAppMock) goWeb() {
 	}()
 	f.GetLog().Print("Starting")
 	f.socket = <-c
-	f.baseUrl = fmt.Sprintf("http://%s", f.socket.Addr().String())
-	f.GetLog().Printf("Started at %s", f.baseUrl)
+	f.baseURL = fmt.Sprintf("http://%s", f.socket.Addr().String())
+	f.GetLog().Printf("Started at %s", f.baseURL)
 }
 
 func (f *WebDumbcasAppMock) closeWeb() {
 	f.socket.Close()
 	f.socket = nil
-	f.baseUrl = ""
+	f.baseURL = ""
 	<-f.closed
 	f.CheckBuffer(false, false)
 }
 
-func (f *WebDumbcasAppMock) get(url string, expectedUrl string) *http.Response {
-	r, err := http.Get(f.baseUrl + url)
+func (f *WebDumbcasAppMock) get(url string, expectedURL string) *http.Response {
+	r, err := http.Get(f.baseURL + url)
 	ut.AssertEqual(f, nil, err)
-	ut.AssertEqualf(f, true, expectedUrl == "" || r.Request.URL.Path == expectedUrl, "%s != %s", expectedUrl, r.Request.URL.Path)
+	ut.AssertEqualf(f, true, expectedURL == "" || r.Request.URL.Path == expectedURL, "%s != %s", expectedURL, r.Request.URL.Path)
 	return r
 }
 
 func (f *WebDumbcasAppMock) get404(url string) {
-	r, err := http.Get(f.baseUrl + url)
+	r, err := http.Get(f.baseURL + url)
 	ut.AssertEqual(f, nil, err)
 	ut.AssertEqual(f, 404, r.StatusCode)
 }

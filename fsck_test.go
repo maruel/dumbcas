@@ -12,6 +12,7 @@ package main
 import (
 	"testing"
 
+	"github.com/maruel/dumbcas/dumbcaslib"
 	"github.com/maruel/ut"
 )
 
@@ -20,9 +21,11 @@ func TestFsckEmpty(t *testing.T) {
 	f := makeDumbcasAppMock(t)
 	args := []string{"fsck", "-root=\\test_fsck_empty"}
 	f.Run(args, 0)
-	items := EnumerateCasAsList(f.TB, f.cas)
+	items, err := dumbcaslib.EnumerateCasAsList(f.cas)
+	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, []string{}, items)
-	nodes := EnumerateNodesAsList(f.TB, f.nodes)
+	nodes, err := dumbcaslib.EnumerateNodesAsList(f.nodes)
+	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, []string{}, nodes)
 }
 
@@ -37,20 +40,30 @@ func TestFsckCorruptCasFile(t *testing.T) {
 		"dir1/dir2/file2": "content2",
 	})
 
+	i1, err := dumbcaslib.EnumerateCasAsList(f.cas)
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, 3, len(i1))
+
 	// Corrupt an item in CasTable.
-	cas := f.cas.(*fakeCasTable)
-	cas.entries[sha1String("content1")] = []byte("content5")
+	f.cas.(dumbcaslib.Corruptable).Corrupt()
+
+	i1, err = dumbcaslib.EnumerateCasAsList(f.cas)
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, 4, len(i1))
+
 	f.Run(args, 0)
 
 	// One entry disapeared. I hope you had a valid secondary copy of your
 	// CasTable.
-	i1 := EnumerateCasAsList(f.TB, f.cas)
-	ut.AssertEqual(t, 2, len(i1))
+	i1, err = dumbcaslib.EnumerateCasAsList(f.cas)
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, 3, len(i1))
 
 	// Note: The node is not quarantined, because in theory the data could be
 	// found on another copy of the CasTable so it's preferable to not delete the
 	// node.
-	n1 := EnumerateNodesAsList(f.TB, f.nodes)
+	n1, err := dumbcaslib.EnumerateNodesAsList(f.nodes)
+	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, 2, len(n1))
 }
 
@@ -67,12 +80,13 @@ func TestFsckCorruptNodeEntry(t *testing.T) {
 	})
 
 	// Corrupt an item in NodesTable.
-	nodes := f.nodes.(*fakeNodesTable)
-	nodes.entries["tags/fictious"] = []byte("Invalid Json")
+	f.nodes.(dumbcaslib.Corruptable).Corrupt()
 	f.Run(args, 0)
 
-	i1 := EnumerateCasAsList(f.TB, f.cas)
+	i1, err := dumbcaslib.EnumerateCasAsList(f.cas)
+	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, 3, len(i1))
-	n1 := EnumerateNodesAsList(f.TB, f.nodes)
+	n1, err := dumbcaslib.EnumerateNodesAsList(f.nodes)
+	ut.AssertEqual(t, nil, err)
 	ut.AssertEqual(t, 1, len(n1))
 }

@@ -7,25 +7,23 @@ an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied. See the License for the specific language governing permissions and
 limitations under the License. */
 
-package main
+package dumbcaslib
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
-	"github.com/maruel/subcommands/subcommandstest"
 	"github.com/maruel/ut"
 )
 
-func TestNodesTable(t *testing.T) {
-	t.Parallel()
-	tb := subcommandstest.MakeTB(t)
-	tempData := makeTempDir(tb, "nodes")
-	defer removeTempDir(tempData)
-
-	// Explicitely use a fake in-memory CasTable.
-	cas := &fakeCasTable{make(map[string][]byte), false, tb}
-	nodes, err := loadLocalNodesTable(tempData, cas, tb.GetLog())
+func makeTempDir(t testing.TB, name string) string {
+	name, err := ioutil.TempDir("", "dumbcas_"+name)
 	ut.AssertEqual(t, nil, err)
+	return name
+}
 
-	testNodesTableImpl(tb, cas, nodes)
+func removeDir(t testing.TB, tempDir string) {
+	err := os.RemoveAll(tempDir)
+	ut.AssertEqual(t, nil, err)
 }

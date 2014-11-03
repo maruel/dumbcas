@@ -7,15 +7,23 @@ an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied. See the License for the specific language governing permissions and
 limitations under the License. */
 
-package main
+package dumbcaslib
 
-type Node struct {
-	Entry   string
-	Comment string `json:",omitempty"`
-}
+import (
+	"testing"
 
-type NodesTable interface {
-	Table
-	// Adds a node to the table.
-	AddEntry(node *Node, name string) (string, error)
+	"github.com/maruel/ut"
+)
+
+func TestNodesTable(t *testing.T) {
+	t.Parallel()
+	tempData := makeTempDir(t, "nodes")
+	defer removeDir(t, tempData)
+
+	// Explicitely use a fake in-memory CasTable.
+	cas := MakeMemoryCasTable()
+	nodes, err := LoadLocalNodesTable(tempData, cas)
+	ut.AssertEqual(t, nil, err)
+
+	testNodesTableImpl(t, cas, nodes)
 }

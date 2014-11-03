@@ -14,14 +14,15 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/maruel/dumbcas/dumbcaslib"
 	"github.com/maruel/ut"
 )
 
 func TestArchive(t *testing.T) {
 	t.Parallel()
 	f := makeDumbcasAppMock(t)
-	tempData := makeTempDir(f.TB, "archive")
-	defer removeTempDir(tempData)
+	tempData := makeTempDir(t, "archive")
+	defer removeDir(t, tempData)
 
 	// Create a tree of stuff.
 	tree := map[string]string{
@@ -43,17 +44,19 @@ func TestArchive(t *testing.T) {
 	args := []string{"archive", "-root=\\test_archive", filepath.Join(tempData, "toArchive")}
 	f.Run(args, 0)
 	f.CheckBuffer(true, false)
-	items := EnumerateCasAsList(f.TB, f.cas)
+	items, err := dumbcaslib.EnumerateCasAsList(f.cas)
+	ut.AssertEqual(t, nil, err)
 
 	expected := make([]string, 0, len(items))
 	sha1tree, entries := marshalData(f.TB, archived)
 	for _, v := range sha1tree {
 		expected = append(expected, v)
 	}
-	expected = append(expected, sha1Bytes(entries))
+	expected = append(expected, dumbcaslib.Sha1Bytes(entries))
 	sort.Strings(expected)
 	ut.AssertEqual(t, items, expected)
 
-	nodes := EnumerateNodesAsList(f.TB, f.nodes)
-	ut.AssertEqual(t, len(nodes), 2)
+	nodes, err := dumbcaslib.EnumerateNodesAsList(f.nodes)
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, 2, len(nodes))
 }

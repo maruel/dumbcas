@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/maruel/dumbcas/dumbcaslib"
 	"github.com/maruel/subcommands"
 )
 
@@ -43,7 +44,7 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 			a.GetLog().Printf("While enumerating the CAS table: %s", item.Error)
 			continue
 		}
-		count += 1
+		count++
 		f, err := c.cas.Open(item.Item)
 		if err != nil {
 			// TODO(maruel): Leaks channel.
@@ -52,14 +53,14 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 		defer func() {
 			_ = f.Close()
 		}()
-		actual, err := sha1File(f)
+		actual, err := sha1Reader(f)
 		if err != nil {
 			// Probably Disk error.
 			// TODO(maruel): Leaks channel.
 			return fmt.Errorf("Aborting! Failed to calcultate the sha1 of %s: %s. Please find a valid copy of your CAS table ASAP.", item.Item, err)
 		}
 		if actual != item.Item {
-			corrupted += 1
+			corrupted++
 			a.GetLog().Printf("Found corrupted object, %s != %s", item.Item, actual)
 			if err := c.cas.Remove(item.Item); err != nil {
 				// TODO(maruel): Leaks channel.
@@ -93,8 +94,8 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 		defer func() {
 			_ = f.Close()
 		}()
-		node := &Node{}
-		if err := loadReaderAsJson(f, node); err != nil {
+		node := &dumbcaslib.Node{}
+		if err := dumbcaslib.LoadReaderAsJSON(f, node); err != nil {
 			a.GetLog().Printf("Failed opening node %s: %s", item.Item, err)
 			_ = c.nodes.Remove(item.Item)
 			corrupted++

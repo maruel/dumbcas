@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/maruel/dumbcas/dumbcaslib"
 	"github.com/maruel/subcommands"
 	"github.com/maruel/subcommands/subcommandstest"
 )
@@ -32,12 +33,13 @@ var application = &subcommands.DefaultApplication{
 	},
 }
 
+// DumbcasApplication is the main application.
 type DumbcasApplication interface {
 	subcommandstest.Application
 	// LoadCache must return a valid Cache instance even in case of failure.
-	LoadCache() (Cache, error)
-	MakeCasTable(rootDir string) (CasTable, error)
-	LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error)
+	LoadCache() (dumbcaslib.Cache, error)
+	MakeCasTable(rootDir string) (dumbcaslib.CasTable, error)
+	LoadNodesTable(rootDir string, cas dumbcaslib.CasTable) (dumbcaslib.NodesTable, error)
 }
 
 type dumbapp struct {
@@ -50,16 +52,16 @@ func (d *dumbapp) GetLog() *log.Logger {
 	return d.log
 }
 
-func (d *dumbapp) LoadCache() (Cache, error) {
-	return loadCache(d.log)
+func (d *dumbapp) LoadCache() (dumbcaslib.Cache, error) {
+	return dumbcaslib.LoadCache()
 }
 
-func (d *dumbapp) MakeCasTable(rootDir string) (CasTable, error) {
-	return makeLocalCasTable(rootDir)
+func (d *dumbapp) MakeCasTable(rootDir string) (dumbcaslib.CasTable, error) {
+	return dumbcaslib.MakeLocalCasTable(rootDir)
 }
 
-func (d *dumbapp) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
-	return loadLocalNodesTable(rootDir, cas, d.GetLog())
+func (d *dumbapp) LoadNodesTable(rootDir string, cas dumbcaslib.CasTable) (dumbcaslib.NodesTable, error) {
+	return dumbcaslib.LoadLocalNodesTable(rootDir, cas)
 }
 
 func main() {

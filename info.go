@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/maruel/dumbcas/dumbcaslib"
 	"github.com/maruel/interrupt"
 	"github.com/maruel/subcommands"
 )
@@ -34,10 +35,10 @@ type infoRun struct {
 	CommonFlags
 }
 
-func printEntry(out io.Writer, entry *Entry, relPath string) (count int) {
+func printEntry(out io.Writer, entry *dumbcaslib.Entry, relPath string) (count int) {
 	if entry.Sha1 != "" {
 		fmt.Fprintf(out, " %s(%d)\n", relPath, entry.Size)
-		count += 1
+		count++
 	}
 	names := make([]string, 0, len(entry.Files))
 	for name := range entry.Files {
@@ -65,12 +66,12 @@ func (c *infoRun) main(a DumbcasApplication, nodeArg string) error {
 	defer func() {
 		_ = f.Close()
 	}()
-	node := &Node{}
-	if err := loadReaderAsJson(f, node); err != nil {
+	node := &dumbcaslib.Node{}
+	if err := dumbcaslib.LoadReaderAsJSON(f, node); err != nil {
 		return err
 	}
 
-	entry, err := LoadEntry(c.cas, node.Entry)
+	entry, err := dumbcaslib.LoadEntry(c.cas, node.Entry)
 	if err != nil {
 		return err
 	}

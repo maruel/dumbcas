@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/maruel/dumbcas/dumbcaslib"
 	"github.com/maruel/interrupt"
 	"github.com/maruel/subcommands"
 )
@@ -40,7 +41,7 @@ type restoreRun struct {
 // Restores entries and keep going on in case of error. Returns the first seen
 // error.
 // Do not overwrite files. A file already present is considered an error.
-func restoreEntry(l *log.Logger, cas CasTable, entry *Entry, root string) (count int, out error) {
+func restoreEntry(l *log.Logger, cas dumbcaslib.CasTable, entry *dumbcaslib.Entry, root string) (count int, out error) {
 	if entry.Sha1 != "" {
 		f, err := cas.Open(entry.Sha1)
 		if err != nil {
@@ -63,7 +64,7 @@ func restoreEntry(l *log.Logger, cas CasTable, entry *Entry, root string) (count
 					} else if size != entry.Size {
 						out = fmt.Errorf("Failed to write %s, expected %d, wrote %d", root, entry.Size, size)
 					} else {
-						count += 1
+						count++
 					}
 				}
 			}
@@ -100,12 +101,12 @@ func (c *restoreRun) main(a DumbcasApplication, nodeArg string) error {
 	defer func() {
 		_ = f.Close()
 	}()
-	node := &Node{}
-	if err := loadReaderAsJson(f, node); err != nil {
+	node := &dumbcaslib.Node{}
+	if err := dumbcaslib.LoadReaderAsJSON(f, node); err != nil {
 		return err
 	}
 
-	entry, err := LoadEntry(c.cas, node.Entry)
+	entry, err := dumbcaslib.LoadEntry(c.cas, node.Entry)
 	if err != nil {
 		return err
 	}

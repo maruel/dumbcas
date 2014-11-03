@@ -7,41 +7,37 @@ an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied. See the License for the specific language governing permissions and
 limitations under the License. */
 
-package main
+package dumbcaslib
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 )
 
-const TrashName = "trash"
+const trashName = "trash"
 
-type trash struct {
+type trashImpl struct {
 	rootDir  string
 	trashDir string
 	created  bool
 }
 
-type Trash interface {
-	Move(relPath string) error
+type trash interface {
+	move(relPath string) error
 }
 
-func MakeTrash(rootDir string) Trash {
+func makeTrash(rootDir string) trash {
 	if !filepath.IsAbs(rootDir) {
 		return nil
 	}
-	return &trash{rootDir: rootDir, trashDir: filepath.Join(rootDir, TrashName)}
+	return &trashImpl{rootDir: rootDir, trashDir: filepath.Join(rootDir, trashName)}
 }
 
-func (t *trash) Move(relPath string) error {
-	log.Printf("Move(%s)", relPath)
+func (t *trashImpl) move(relPath string) error {
 	if !t.created {
 		if err := os.Mkdir(t.trashDir, 0750); err != nil && !os.IsExist(err) {
 			return fmt.Errorf("Failed to create %s: %s", t.trashDir, err)
-		} else if err == nil {
-			log.Print("Created trash at " + t.trashDir)
 		}
 		t.created = true
 	}
@@ -51,7 +47,6 @@ func (t *trash) Move(relPath string) error {
 		if err := os.MkdirAll(dir, 0750); err != nil && !os.IsExist(err) {
 			return fmt.Errorf("Failed to create %s: %s", dir, err)
 		}
-		log.Print("Created trash subdir " + dir)
 	}
 	return os.Rename(filepath.Join(t.rootDir, relPath), filepath.Join(t.trashDir, relPath))
 }

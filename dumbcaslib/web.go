@@ -7,20 +7,16 @@ an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied. See the License for the specific language governing permissions and
 limitations under the License. */
 
-package main
+package dumbcaslib
 
-import (
-	"io"
-)
+import "net/http"
 
-type CasTable interface {
-	Table
-	// Adds a node to the table.
-	AddEntry(source io.Reader, name string) error
-	// Sets the bit that the table needs to be checked for consistency.
-	SetFsckBit()
-	// Returns if the fsck bit is set.
-	GetFsckBit() bool
-	// Clears the fsck bit.
-	ClearFsckBit()
+// localRedirect gives a Moved Permanently response.
+// It does not convert relative paths to absolute paths like Redirect does.
+func localRedirect(w http.ResponseWriter, r *http.Request, newPath string) {
+	if q := r.URL.RawQuery; q != "" {
+		newPath += "?" + q
+	}
+	w.Header().Set("Location", newPath)
+	w.WriteHeader(http.StatusMovedPermanently)
 }

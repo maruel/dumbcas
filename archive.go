@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/maruel/dumbcas/dumbcaslib"
 	"github.com/maruel/interrupt"
 	"github.com/maruel/subcommands"
 )
@@ -43,7 +44,7 @@ type archiveRun struct {
 }
 
 // For an item, tries to refresh its sha1 efficiently.
-func updateFile(cache *EntryCache, item inputItem) (bool, error) {
+func updateFile(cache *dumbcaslib.EntryCache, item inputItem) (bool, error) {
 	now := time.Now().Unix()
 	size := item.Size()
 	timestamp := item.ModTime().Unix()
@@ -53,7 +54,7 @@ func updateFile(cache *EntryCache, item inputItem) (bool, error) {
 		return false, nil
 	}
 
-	digest, err := sha1FilePath(item.fullPath)
+	digest, err := sha1File(item.fullPath)
 	if err != nil {
 		return false, err
 	}
@@ -106,7 +107,7 @@ func (s *syncInt) g() syncInt {
 
 // Statistics are used with atomic functions. While not Go-idiomatic, it's much
 // faster than using mutexes when calling i++ 100k times.
-type StatsValues struct {
+type statsValues struct {
 	errors           syncInt
 	found            syncInt // enumerateInputs()
 	totalSize        syncInt
@@ -121,16 +122,16 @@ type StatsValues struct {
 }
 
 // Stores statistic of the on-going process.
-type Stats struct {
-	StatsValues
+type stats struct {
+	statsValues
 	interrupted syncInt
 	out         chan<- string
 	done        chan<- bool
 }
 
-// Creates a copy of StatsValues. Note that the copy *may* be inconsistent.
-func (s *StatsValues) Copy() *StatsValues {
-	return &StatsValues{
+// Creates a copy of statsValues. Note that the copy *may* be inconsistent.
+func (s *statsValues) Copy() *statsValues {
+	return &statsValues{
 		s.errors.g(),
 		s.found.g(),
 		s.totalSize.g(),
@@ -145,19 +146,19 @@ func (s *StatsValues) Copy() *StatsValues {
 	}
 }
 
-// Compares two local copy of StatsValues. Must *not* be used on a Stats instance.
-func (lhs *StatsValues) Equals(rhs *StatsValues) bool {
-	return (lhs.errors.Get() == rhs.errors.Get() &&
-		lhs.found.Get() == rhs.found.Get() &&
-		lhs.totalSize.Get() == rhs.totalSize.Get() &&
-		lhs.nbHashed.Get() == rhs.nbHashed.Get() &&
-		lhs.bytesHashed.Get() == rhs.bytesHashed.Get() &&
-		lhs.nbNotHashed.Get() == rhs.nbNotHashed.Get() &&
-		lhs.bytesNotHashed.Get() == rhs.bytesNotHashed.Get() &&
-		lhs.nbArchived.Get() == rhs.nbArchived.Get() &&
-		lhs.bytesArchived.Get() == rhs.bytesArchived.Get() &&
-		lhs.nbNotArchived.Get() == rhs.nbNotArchived.Get() &&
-		lhs.bytesNotArchived.Get() == rhs.bytesNotArchived.Get())
+// equals compares two local copy of statsValues. Must *not* be used on a stats instance.
+func (s *statsValues) equals(rhs *statsValues) bool {
+	return (s.errors.Get() == rhs.errors.Get() &&
+		s.found.Get() == rhs.found.Get() &&
+		s.totalSize.Get() == rhs.totalSize.Get() &&
+		s.nbHashed.Get() == rhs.nbHashed.Get() &&
+		s.bytesHashed.Get() == rhs.bytesHashed.Get() &&
+		s.nbNotHashed.Get() == rhs.nbNotHashed.Get() &&
+		s.bytesNotHashed.Get() == rhs.bytesNotHashed.Get() &&
+		s.nbArchived.Get() == rhs.nbArchived.Get() &&
+		s.bytesArchived.Get() == rhs.bytesArchived.Get() &&
+		s.nbNotArchived.Get() == rhs.nbNotArchived.Get() &&
+		s.bytesNotArchived.Get() == rhs.bytesNotArchived.Get())
 }
 
 type inputItem struct {
@@ -168,7 +169,7 @@ type inputItem struct {
 
 // enumerateInputs reads the directories trees of each inputs and send each
 // file into the output channel.
-func (s *Stats) enumerateInputs(inputs []string) <-chan inputItem {
+func (s *stats) enumerateInputs(inputs []string) <-chan inputItem {
 	// Throtttle after 128k entries.
 	c := make(chan inputItem, 128000)
 	go func() {
@@ -192,7 +193,7 @@ func (s *Stats) enumerateInputs(inputs []string) <-chan inputItem {
 			}
 			if stat.IsDir() {
 				// Send the items back in the channel.
-				d := EnumerateTree(input)
+				d := dumbcaslib.EnumerateTree(input)
 				cont := true
 				for cont {
 					select {
@@ -243,7 +244,7 @@ type itemToArchive struct {
 }
 
 // Calculates each entry. Assumes inputs is cleaned paths.
-func (s *Stats) hashInputs(a DumbcasApplication, inputs <-chan inputItem) <-chan itemToArchive {
+func (s *stats) hashInputs(a DumbcasApplication, inputs <-chan inputItem) <-chan itemToArchive {
 	c := make(chan itemToArchive, 4096)
 	go func() {
 		// LoadCache must return a valid Cache instance even in case of failure.
@@ -254,7 +255,8 @@ func (s *Stats) hashInputs(a DumbcasApplication, inputs <-chan inputItem) <-chan
 		defer func() {
 			// Must save the cache *before* sending the 'done' signal.
 			close(c)
-			cache.Close()
+			// TODO(maruel): Surface the error.
+			_ = cache.Close()
 			s.done <- true
 		}()
 		for {
@@ -272,7 +274,7 @@ func (s *Stats) hashInputs(a DumbcasApplication, inputs <-chan inputItem) <-chan
 					panic("This can't happen; enumerateInputs() should eat all the directories.")
 				}
 				size := item.Size()
-				cachedItem := FindInCache(cache, item.fullPath)
+				cachedItem := dumbcaslib.FindInCache(cache, item.fullPath)
 				if wasHashed, err := updateFile(cachedItem, item); err != nil {
 					// Eat the error and continue archiving other items.
 					s.errors.Add(1)
@@ -294,7 +296,7 @@ func (s *Stats) hashInputs(a DumbcasApplication, inputs <-chan inputItem) <-chan
 }
 
 // Archives one item in the CAS table.
-func (s *Stats) archiveItem(item itemToArchive, cas CasTable) {
+func (s *stats) archiveItem(item itemToArchive, cas dumbcaslib.CasTable) {
 	f, err := os.Open(item.fullPath)
 	if err != nil {
 		s.errors.Add(1)
@@ -318,13 +320,13 @@ func (s *Stats) archiveItem(item itemToArchive, cas CasTable) {
 }
 
 // Creates the Entry instance and the necessary Entry tree for |item|.
-func makeEntry(root *Entry, item itemToArchive) {
+func makeEntry(root *dumbcaslib.Entry, item itemToArchive) {
 	for _, p := range strings.Split(item.relPath, string(filepath.Separator)) {
 		if root.Files == nil {
-			root.Files = make(map[string]*Entry)
+			root.Files = make(map[string]*dumbcaslib.Entry)
 		}
 		if root.Files[p] == nil {
-			root.Files[p] = &Entry{}
+			root.Files[p] = &dumbcaslib.Entry{}
 		}
 		root = root.Files[p]
 	}
@@ -333,14 +335,14 @@ func makeEntry(root *Entry, item itemToArchive) {
 }
 
 // Archives the items.
-func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan itemToArchive) <-chan string {
+func (s *stats) archiveInputs(a DumbcasApplication, cas dumbcaslib.CasTable, items <-chan itemToArchive) <-chan string {
 	c := make(chan string)
 	go func() {
 		defer func() {
 			close(c)
 			s.done <- true
 		}()
-		entryRoot := &Entry{}
+		entryRoot := &dumbcaslib.Entry{}
 		cont := true
 		for cont {
 			select {
@@ -364,7 +366,7 @@ func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan i
 			s.errors.Add(1)
 			s.out <- fmt.Sprintf("Failed to marshal entry file: %s", err)
 		} else {
-			entrySha1, err := AddBytes(cas, data)
+			entrySha1, err := dumbcaslib.AddBytes(cas, data)
 			if os.IsExist(err) {
 				s.nbNotArchived.Add(1)
 				s.bytesNotArchived.Add(int64(len(data)))
@@ -424,10 +426,8 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 	// Start the processes.
 	output := make(chan string)
 	done := make(chan bool, 3)
-	s := Stats{out: output, done: done}
-	items_to_scan := s.enumerateInputs(inputs)
-	items_hashed := s.hashInputs(a, items_to_scan)
-	entry := s.archiveInputs(a, c.cas, items_hashed)
+	s := stats{out: output, done: done}
+	entry := s.archiveInputs(a, c.cas, s.hashInputs(a, s.enumerateInputs(inputs)))
 
 	headerWasPrinted := false
 	columns := []string{
@@ -465,7 +465,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 				continue
 			}
 			if item != "" {
-				node := &Node{Entry: item, Comment: c.comment}
+				node := &dumbcaslib.Node{Entry: item, Comment: c.comment}
 				_, err = c.nodes.AddEntry(node, filepath.Base(toArchive))
 				err = errDone
 			} else {
@@ -480,7 +480,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 			}
 		case <-time.After(5 * time.Second):
 			nextStats := s.Copy()
-			if !prevStats.Equals(nextStats) {
+			if !prevStats.equals(nextStats) {
 				if !headerWasPrinted {
 					a.GetLog().Printf(column)
 					headerWasPrinted = true

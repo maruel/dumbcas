@@ -7,13 +7,12 @@ an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied. See the License for the specific language governing permissions and
 limitations under the License. */
 
-package main
+package dumbcaslib
 
 import (
 	"fmt"
 	"testing"
 
-	"github.com/maruel/subcommands/subcommandstest"
 	"github.com/maruel/ut"
 )
 
@@ -42,11 +41,10 @@ func TestPrefixSpace(t *testing.T) {
 
 func TestCasTableImpl(t *testing.T) {
 	t.Parallel()
-	tb := subcommandstest.MakeTB(t)
-	tempData := makeTempDir(tb, "cas")
-	defer removeTempDir(tempData)
+	tempData := makeTempDir(t, "cas")
+	defer removeDir(t, tempData)
 
-	cas, err := makeLocalCasTable(tempData)
+	cas, err := MakeLocalCasTable(tempData)
 	ut.AssertEqual(t, nil, err)
-	testCasTableImpl(tb, cas)
+	testCasTableImpl(t, cas)
 }

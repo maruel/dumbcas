@@ -38,7 +38,7 @@ type webRun struct {
 }
 
 // Converts an handler to log every HTTP request.
-type LoggingHandler struct {
+type loggingHandler struct {
 	handler http.Handler
 	log     *log.Logger
 }
@@ -60,13 +60,13 @@ func (l *loggingResponseWriter) WriteHeader(status int) {
 	l.status = status
 }
 
-func (l *LoggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	l_w := &loggingResponseWriter{ResponseWriter: w}
-	l.handler.ServeHTTP(l_w, r)
+func (l *loggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	lW := &loggingResponseWriter{ResponseWriter: w}
+	l.handler.ServeHTTP(lW, r)
 	l.log.Printf("%s - %3d %6db %4s %s",
 		r.RemoteAddr,
-		l_w.status,
-		l_w.length,
+		lW.status,
+		lW.length,
 		r.Method,
 		r.RequestURI)
 }
@@ -89,18 +89,8 @@ func (d restricted) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func Restrict(h http.Handler, m ...string) http.Handler {
+func restrict(h http.Handler, m ...string) http.Handler {
 	return restricted{h, m}
-}
-
-// localRedirect gives a Moved Permanently response.
-// It does not convert relative paths to absolute paths like Redirect does.
-func localRedirect(w http.ResponseWriter, r *http.Request, newPath string) {
-	if q := r.URL.RawQuery; q != "" {
-		newPath += "?" + q
-	}
-	w.Header().Set("Location", newPath)
-	w.WriteHeader(http.StatusMovedPermanently)
 }
 
 func (c *webRun) main(d DumbcasApplication, ready chan<- net.Listener) error {
@@ -111,10 +101,10 @@ func (c *webRun) main(d DumbcasApplication, ready chan<- net.Listener) error {
 	serveMux := http.NewServeMux()
 
 	x := http.StripPrefix("/content/retrieve/default", c.cas)
-	serveMux.Handle("/content/retrieve/default/", Restrict(x, "GET"))
+	serveMux.Handle("/content/retrieve/default/", restrict(x, "GET"))
 	x = http.StripPrefix("/content/retrieve/nodes", c.nodes)
-	serveMux.Handle("/content/retrieve/nodes/", Restrict(x, "GET"))
-	serveMux.Handle("/", Restrict(http.RedirectHandler("/content/retrieve/nodes/", http.StatusFound), "GET"))
+	serveMux.Handle("/content/retrieve/nodes/", restrict(x, "GET"))
+	serveMux.Handle("/", restrict(http.RedirectHandler("/content/retrieve/nodes/", http.StatusFound), "GET"))
 
 	var addr string
 	if c.local {
@@ -124,7 +114,7 @@ func (c *webRun) main(d DumbcasApplication, ready chan<- net.Listener) error {
 	}
 	s := &http.Server{
 		Addr:    addr,
-		Handler: &LoggingHandler{serveMux, d.GetLog()},
+		Handler: &loggingHandler{serveMux, d.GetLog()},
 	}
 	ls, e := net.Listen("tcp", s.Addr)
 	if e != nil {

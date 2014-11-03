@@ -7,14 +7,13 @@ an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied. See the License for the specific language governing permissions and
 limitations under the License. */
 
-package main
+package dumbcaslib
 
 import (
 	"bytes"
 	"crypto/sha1"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,19 +31,17 @@ type casTable struct {
 	prefixLength int
 	hashLength   int
 	validPath    *regexp.Regexp
-	trash        Trash
+	trash        trash
 }
 
-// Converts an entry in the table into a proper file path.
+// filePath converts an entry in the table into a proper file path.
 func (c *casTable) filePath(hash string) string {
 	match := c.validPath.FindStringSubmatch(hash)
 	if match == nil {
-		log.Printf("filePath(%s) is invalid", hash)
 		return ""
 	}
 	fullPath := filepath.Join(c.casDir, match[0][:c.prefixLength], match[0][c.prefixLength:])
 	if !filepath.IsAbs(fullPath) {
-		log.Printf("filePath(%s) is invalid", hash)
 		return ""
 	}
 	return fullPath
@@ -57,8 +54,8 @@ func prefixSpace(prefixLength uint) int {
 	return 1 << (prefixLength * 4)
 }
 
-func makeLocalCasTable(rootDir string) (CasTable, error) {
-	//log.Printf("makeCasTable(%s)", rootDir)
+// MakeLocalCasTable returns a CasTable rooted at rootDir.
+func MakeLocalCasTable(rootDir string) (CasTable, error) {
 	// Creates 16^3 (4096) directories. Preferable values are 2 or 3.
 	prefixLength := 3
 	// Currently hardcoded for SHA-1 but could be used for any length.
@@ -87,13 +84,12 @@ func makeLocalCasTable(rootDir string) (CasTable, error) {
 		prefixLength,
 		hashLength,
 		regexp.MustCompile(fmt.Sprintf("^([a-f0-9]{%d})$", hashLength)),
-		MakeTrash(casDir),
+		makeTrash(casDir),
 	}, nil
 }
 
 // Expects the format "/<hash>". In particular, refuses "/<hash>/".
 func (c *casTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	//log.Printf("casTable.ServeHTTP(%s)", r.URL.Path)
 	if r.URL.Path == "" || r.URL.Path[0] != '/' {
 		http.Error(w, "Internal failure. CasTable received an invalid url: "+r.URL.Path, http.StatusNotImplemented)
 		return
@@ -124,11 +120,11 @@ func (c *casTable) Enumerate() <-chan EnumerationEntry {
 				if interrupt.IsSet() {
 					break
 				}
-				if prefix == TrashName {
+				if prefix == trashName {
 					continue
 				}
 				if !rePrefix.MatchString(prefix) {
-					_ = c.trash.Move(prefix)
+					_ = c.trash.move(prefix)
 					c.SetFsckBit()
 					continue
 				}
@@ -142,7 +138,7 @@ func (c *casTable) Enumerate() <-chan EnumerationEntry {
 				}
 				for _, item := range subitems {
 					if !reRest.MatchString(item) {
-						_ = c.trash.Move(filepath.Join(prefix, item))
+						_ = c.trash.move(filepath.Join(prefix, item))
 						c.SetFsckBit()
 						continue
 					}
@@ -182,7 +178,6 @@ func (c *casTable) Open(hash string) (ReadSeekCloser, error) {
 }
 
 func (c *casTable) SetFsckBit() {
-	log.Printf("Marking for fsck")
 	f, _ := os.Create(filepath.Join(c.casDir, needFsckName))
 	if f != nil {
 		_ = f.Close()
@@ -207,11 +202,12 @@ func (c *casTable) Remove(hash string) error {
 	if match == nil {
 		return fmt.Errorf("Remove(%s) is invalid", hash)
 	}
-	return c.trash.Move(filepath.Join(hash[:c.prefixLength], hash[c.prefixLength:]))
+	return c.trash.move(filepath.Join(hash[:c.prefixLength], hash[c.prefixLength:]))
 }
 
-// Utility function when the data is already in memory but not yet hashed.
+// AddBytes adds an entry in a CasTable when the data is already in memory but
+// not yet hashed.
 func AddBytes(c CasTable, data []byte) (string, error) {
-	hash := sha1Bytes(data)
+	hash := Sha1Bytes(data)
 	return hash, c.AddEntry(bytes.NewBuffer(data), hash)
 }

@@ -11,8 +11,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/maruel/subcommands"
 	"regexp"
+
+	"github.com/maruel/subcommands"
 )
 
 var cmdFsck = &subcommands.Command{
@@ -48,7 +49,9 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 			// TODO(maruel): Leaks channel.
 			return fmt.Errorf("Failed to open %s: %s", item.Item, err)
 		}
-		defer f.Close()
+		defer func() {
+			_ = f.Close()
+		}()
 		actual, err := sha1File(f)
 		if err != nil {
 			// Probably Disk error.
@@ -83,21 +86,23 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 		f, err := c.nodes.Open(item.Item)
 		if err != nil {
 			a.GetLog().Printf("Failed opening node %s: %s", item.Item, err)
-			c.nodes.Remove(item.Item)
+			_ = c.nodes.Remove(item.Item)
 			corrupted++
 			continue
 		}
-		defer f.Close()
+		defer func() {
+			_ = f.Close()
+		}()
 		node := &Node{}
 		if err := loadReaderAsJson(f, node); err != nil {
 			a.GetLog().Printf("Failed opening node %s: %s", item.Item, err)
-			c.nodes.Remove(item.Item)
+			_ = c.nodes.Remove(item.Item)
 			corrupted++
 			continue
 		}
 		if !resha1.MatchString(node.Entry) {
 			a.GetLog().Printf("Node %s is corrupted: %v", item.Item, node)
-			c.nodes.Remove(item.Item)
+			_ = c.nodes.Remove(item.Item)
 			corrupted++
 			continue
 		}

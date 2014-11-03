@@ -126,7 +126,7 @@ func (c *casTable) Enumerate() <-chan EnumerationEntry {
 					continue
 				}
 				if !rePrefix.MatchString(prefix) {
-					c.trash.Move(prefix)
+					_ = c.trash.Move(prefix)
 					c.SetFsckBit()
 					continue
 				}
@@ -140,7 +140,7 @@ func (c *casTable) Enumerate() <-chan EnumerationEntry {
 				}
 				for _, item := range subitems {
 					if !reRest.MatchString(item) {
-						c.trash.Move(filepath.Join(prefix, item))
+						_ = c.trash.Move(filepath.Join(prefix, item))
 						c.SetFsckBit()
 						continue
 					}
@@ -164,7 +164,9 @@ func (c *casTable) AddEntry(source io.Reader, hash string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to copy(dst) %s: %s", dst, err)
 	}
-	defer df.Close()
+	defer func() {
+		_ = df.Close()
+	}()
 	_, err = io.Copy(df, source)
 	return err
 }
@@ -181,7 +183,7 @@ func (c *casTable) SetFsckBit() {
 	log.Printf("Marking for fsck")
 	f, _ := os.Create(filepath.Join(c.casDir, needFsckName))
 	if f != nil {
-		f.Close()
+		_ = f.Close()
 	}
 }
 
@@ -190,13 +192,12 @@ func (c *casTable) GetFsckBit() bool {
 	if f == nil {
 		return false
 	}
-	f.Close()
+	_ = f.Close()
 	return true
 }
 
 func (c *casTable) ClearFsckBit() {
-	// Ignore the error.
-	os.Remove(filepath.Join(c.casDir, needFsckName))
+	_ = os.Remove(filepath.Join(c.casDir, needFsckName))
 }
 
 func (c *casTable) Remove(hash string) error {

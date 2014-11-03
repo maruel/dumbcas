@@ -11,12 +11,13 @@ package main
 
 import (
 	"bytes"
-	"github.com/maruel/subcommands/subcommandstest"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"testing"
 	"time"
+
+	"github.com/maruel/subcommands/subcommandstest"
 )
 
 // A working Cache implementation that is very simple and keeps everything in

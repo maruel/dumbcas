@@ -105,10 +105,10 @@ func (n *nodesTable) AddEntry(node *Node, name string) (string, error) {
 			suffix += 1
 		} else {
 			if _, err = f.Write(data); err != nil {
-				f.Close()
+				_ = f.Close()
 				return "", fmt.Errorf("Failed to write %s: %s", f.Name(), err)
 			}
-			f.Close()
+			_ = f.Close()
 			n.log.Printf("Saved node: %s", filepath.Join(monthName, nodeName))
 			break
 		}
@@ -124,15 +124,16 @@ func (n *nodesTable) AddEntry(node *Node, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Ignore error.
-	os.Remove(tagPath)
+	_ = os.Remove(tagPath)
 	if err := os.Symlink(relPath, tagPath); err != nil {
 		// Fallback to rewrite the same data.
 		f, err := os.OpenFile(tagPath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0640)
 		if err != nil {
 			return "", fmt.Errorf("Failed to create tag %s: %s", tagPath, err)
 		}
-		defer f.Close()
+		defer func() {
+			_ = f.Close()
+		}()
 		if _, err = f.Write(data); err != nil {
 			return "", fmt.Errorf("Failed to write %s: %s", tagPath, err)
 		}
@@ -192,7 +193,9 @@ func LoadEntry(cas CasTable, hash string) (*Entry, error) {
 		cas.SetFsckBit()
 		return nil, fmt.Errorf("Invalid entry name: %s", hash)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	entry := &Entry{}
 	if err := loadReaderAsJson(f, entry); err != nil {
 		cas.SetFsckBit()
@@ -206,13 +209,13 @@ func LoadEntry(cas CasTable, hash string) (*Entry, error) {
 func dirList(w http.ResponseWriter, items []string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	io.WriteString(w, "<html><body><pre>")
+	_, _ = io.WriteString(w, "<html><body><pre>")
 	sort.Strings(items)
 	for _, name := range items {
 		name = html.EscapeString(name)
 		fmt.Fprintf(w, "<a href=\"%s\">%s</a>\n", name, name)
 	}
-	io.WriteString(w, "</pre></body></html>")
+	_, _ = io.WriteString(w, "</pre></body></html>")
 }
 
 // Loads a node from the file system if found.
@@ -234,7 +237,9 @@ func (n *nodesTable) getNode(url string) (*Node, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		defer f.Close()
+		defer func() {
+			_ = f.Close()
+		}()
 		stat, err := f.Stat()
 		if err != nil {
 			return nil, "", err
@@ -303,7 +308,9 @@ func (n *nodesTable) getEntry(entryName string) (*entryCache, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to load the entry file: %s", err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	if err := loadReaderAsJson(f, &entryObj.entry); err != nil {
 		return nil, err
 	}

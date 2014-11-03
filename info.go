@@ -11,9 +11,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/maruel/subcommands"
 	"io"
 	"path/filepath"
+
+	"github.com/maruel/subcommands"
 )
 
 var cmdInfo = &subcommands.Command{
@@ -53,7 +54,9 @@ func (c *infoRun) main(a DumbcasApplication, nodeArg string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	node := &Node{}
 	if err := loadReaderAsJson(f, node); err != nil {
 		return err

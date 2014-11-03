@@ -14,13 +14,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/maruel/subcommands"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/maruel/subcommands"
 )
 
 var cmdArchive = &subcommands.Command{
@@ -299,7 +300,9 @@ func (s *Stats) archiveItem(item itemToArchive, cas CasTable) {
 		s.out <- fmt.Sprintf("Failed to archive %s: %s", item.fullPath, err)
 		return
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	err = cas.AddEntry(f, item.sha1)
 	if os.IsExist(err) {
 		s.nbNotArchived.Add(1)
@@ -434,7 +437,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 		"Skipped",
 		"Done",
 	}
-	for i, _ := range columns {
+	for i := range columns {
 		columns[i] = fmt.Sprintf("%-19s", columns[i])
 	}
 	column := strings.TrimSpace(strings.Join(columns, ""))

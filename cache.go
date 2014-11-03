@@ -49,7 +49,7 @@ func (e *EntryCache) Print(w io.Writer, indent string) {
 
 func (e *EntryCache) SortedFiles() []string {
 	out := make([]string, 0, len(e.Files))
-	for f, _ := range e.Files {
+	for f := range e.Files {
 		out = append(out, f)
 	}
 	sort.Strings(out)
@@ -130,7 +130,9 @@ func loadCacheInner(cacheDir string, l *log.Logger) (Cache, error) {
 		}
 		return cache, fmt.Errorf("Failed to access %s: %s", cache.filePath, err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	// The cache uses gob instead of json because:
 	// - The data can be read and written incrementally instead of having to read
 	//   it all at once.
@@ -168,7 +170,7 @@ func (c *cache) Close() {
 	if err := e.Encode(c.root); err != nil {
 		c.log.Printf("Failed to write %s: %s", c.filePath, err)
 	}
-	f.Close()
+	_ = f.Close()
 	stat, err := os.Stat(c.filePath)
 	if err != nil {
 		c.log.Printf("Unexpected error while stat'ing %s: %s", c.filePath, err)

@@ -11,8 +11,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/maruel/subcommands/subcommandstest"
 	"testing"
+
+	"github.com/maruel/subcommands/subcommandstest"
 )
 
 func TestPrefixSpace(t *testing.T) {
@@ -23,11 +24,11 @@ func TestPrefixSpace(t *testing.T) {
 		s string
 	}
 	checks := map[int]S{
-		0: S{0, ""},
-		1: S{16, "f"},
-		2: S{256, "ff"},
-		3: S{4096, "fff"},
-		4: S{65536, "ffff"},
+		0: {0, ""},
+		1: {16, "f"},
+		2: {256, "ff"},
+		3: {4096, "fff"},
+		4: {65536, "ffff"},
 	}
 	for prefixLength, s := range checks {
 		x := prefixSpace(uint(prefixLength))

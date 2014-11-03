@@ -33,7 +33,7 @@ func (e *Entry) SortedFiles() []string {
 		return []string{}
 	}
 	out := make([]string, 0, len(e.Files))
-	for f, _ := range e.Files {
+	for f := range e.Files {
 		out = append(out, f)
 	}
 	sort.Strings(out)

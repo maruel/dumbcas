@@ -14,7 +14,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/maruel/subcommands/subcommandstest"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +24,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/maruel/subcommands/subcommandstest"
 )
 
 // A working NodesTable implementation that keeps data in memory.
@@ -83,7 +84,7 @@ func (m *fakeNodesTable) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// List the corresponding "directory", if found.
 	items := []string{}
-	for k, _ := range m.entries {
+	for k := range m.entries {
 		k = strings.Replace(k, string(filepath.Separator), "/", -1)
 		if strings.HasPrefix(k, suburl) {
 			v := strings.SplitAfterN(k[len(suburl):], "/", 2)
@@ -137,7 +138,7 @@ func (m *fakeNodesTable) Enumerate() <-chan EnumerationEntry {
 	c := make(chan EnumerationEntry)
 	go func() {
 		// TODO(maruel): Will blow up if mutated concurrently.
-		for k, _ := range m.entries {
+		for k := range m.entries {
 			c <- EnumerationEntry{Item: k}
 		}
 		close(c)

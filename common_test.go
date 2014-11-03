@@ -14,11 +14,12 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"github.com/maruel/subcommands/subcommandstest"
 	"io"
 	"math/big"
 	"os"
 	"path/filepath"
+
+	"github.com/maruel/subcommands/subcommandstest"
 )
 
 func GetRandRune() rune {

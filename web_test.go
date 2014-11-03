@@ -11,8 +11,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/maruel/subcommands"
-	"github.com/maruel/subcommands/subcommandstest"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -21,6 +19,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/maruel/subcommands"
+	"github.com/maruel/subcommands/subcommandstest"
 )
 
 // Starts the web server in a separate threads and looks for expected results.

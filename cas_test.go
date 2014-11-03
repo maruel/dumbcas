@@ -12,13 +12,14 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/maruel/subcommands/subcommandstest"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"sort"
 	"testing"
+
+	"github.com/maruel/subcommands/subcommandstest"
 )
 
 // A working CasTable implementation that keeps all the data in memory.
@@ -44,7 +45,7 @@ func (m *fakeCasTable) Enumerate() <-chan EnumerationEntry {
 	// First make a copy of the keys.
 	keys := make([]string, len(m.entries))
 	i := 0
-	for k, _ := range m.entries {
+	for k := range m.entries {
 		keys[i] = k
 		i++
 	}

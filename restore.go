@@ -11,11 +11,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/maruel/subcommands"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/maruel/subcommands"
 )
 
 var cmdRestore = &subcommands.Command{
@@ -44,7 +45,9 @@ func restoreEntry(l *log.Logger, cas CasTable, entry *Entry, root string) (count
 		if err != nil {
 			out = fmt.Errorf("Failed to fetch %s for %s: %s", entry.Sha1, root, err)
 		} else {
-			defer f.Close()
+			defer func() {
+				_ = f.Close()
+			}()
 			baseDir := filepath.Dir(root)
 			if err = os.MkdirAll(baseDir, 0755); err != nil && !os.IsExist(err) {
 				out = fmt.Errorf("Failed to create %s: %s", baseDir, err)
@@ -93,7 +96,9 @@ func (c *restoreRun) main(a DumbcasApplication, nodeArg string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	node := &Node{}
 	if err := loadReaderAsJson(f, node); err != nil {
 		return err

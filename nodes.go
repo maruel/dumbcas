@@ -9,8 +9,6 @@ limitations under the License. */
 
 package main
 
-import ()
-
 type Node struct {
 	Entry   string
 	Comment string `json:",omitempty"`

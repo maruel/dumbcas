@@ -11,10 +11,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/maruel/subcommands"
 	"log"
 	"net"
 	"net/http"
+
+	"github.com/maruel/subcommands"
 )
 
 var cmdWeb = &subcommands.Command{

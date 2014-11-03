@@ -11,6 +11,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/maruel/subcommands"
 )
 
@@ -66,7 +67,9 @@ func (c *gcRun) main(a DumbcasApplication) error {
 			c.cas.SetFsckBit()
 			return fmt.Errorf("Failed opening node %s: %s", item.Item, err)
 		}
-		defer f.Close()
+		defer func() {
+			_ = f.Close()
+		}()
 		node := &Node{}
 		if err := loadReaderAsJson(f, node); err != nil {
 			// TODO(maruel): Leaks channel.

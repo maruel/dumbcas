@@ -10,9 +10,10 @@ limitations under the License. */
 package main
 
 import (
+	"testing"
+
 	"github.com/maruel/subcommands"
 	"github.com/maruel/subcommands/subcommandstest"
-	"testing"
 )
 
 func init() {

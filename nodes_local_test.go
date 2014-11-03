@@ -10,8 +10,9 @@ limitations under the License. */
 package main
 
 import (
-	"github.com/maruel/subcommands/subcommandstest"
 	"testing"
+
+	"github.com/maruel/subcommands/subcommandstest"
 )
 
 func TestNodesTable(t *testing.T) {

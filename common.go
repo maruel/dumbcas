@@ -15,12 +15,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/maruel/subcommands"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/maruel/subcommands"
 )
 
 // Table represents a flag table of data.
@@ -101,7 +102,9 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) bool {
 		c <- TreeItem{Error: err}
 		return false
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	for {
 		if IsInterrupted() {
 			break
@@ -153,7 +156,9 @@ func readDirNames(dirPath string) ([]string, error) {
 	if err != nil {
 		return []string{}, err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	return f.Readdirnames(0)
 }
 
@@ -164,7 +169,9 @@ func readDirFancy(dirPath string) ([]string, error) {
 	if err != nil {
 		return names, err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	for {
 		dirs, err := f.Readdir(1024)
 		if err != nil || len(dirs) == 0 {
@@ -194,13 +201,15 @@ func sha1FilePath(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	return sha1File(f)
 }
 
 func sha1Bytes(content []byte) string {
 	hash := sha1.New()
-	hash.Write(content)
+	_, _ = hash.Write(content)
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
@@ -217,6 +226,8 @@ func loadFileAsJson(filepath string, value interface{}) error {
 	if err != nil {
 		return fmt.Errorf("loadFileAsJson(%s): %s", filepath, err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	return loadReaderAsJson(f, value)
 }

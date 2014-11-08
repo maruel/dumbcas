@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 
 // A working NodesTable implementation that keeps data in memory.
 type fakeNodesTable struct {
+	lock    sync.Mutex
 	entries map[string][]byte
 	cas     CasTable
 	t       *subcommandstest.TB
@@ -37,7 +39,7 @@ type fakeNodesTable struct {
 
 func (a *DumbcasAppMock) LoadNodesTable(rootDir string, cas CasTable) (NodesTable, error) {
 	if a.nodes == nil {
-		a.nodes = &fakeNodesTable{make(map[string][]byte), a.cas, a.TB}
+		a.nodes = &fakeNodesTable{entries: make(map[string][]byte), cas: a.cas, t: a.TB}
 	}
 	return a.nodes, nil
 }
@@ -137,8 +139,13 @@ func (m *fakeNodesTable) Enumerate() <-chan EnumerationEntry {
 	m.t.GetLog().Printf("fakeNodesTable.Enumerate() %d", len(m.entries))
 	c := make(chan EnumerationEntry)
 	go func() {
-		// TODO(maruel): Will blow up if mutated concurrently.
-		for k := range m.entries {
+		m.lock.Lock()
+		entries := make(map[string][]byte)
+		for k, v := range m.entries {
+			entries[k] = v
+		}
+		m.lock.Unlock()
+		for k := range entries {
 			c <- EnumerationEntry{Item: k}
 		}
 		close(c)
@@ -148,6 +155,8 @@ func (m *fakeNodesTable) Enumerate() <-chan EnumerationEntry {
 
 func (m *fakeNodesTable) Open(item string) (ReadSeekCloser, error) {
 	m.t.GetLog().Printf("fakeNodesTable.Open(%s)", item)
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	data, ok := m.entries[item]
 	if !ok {
 		return nil, fmt.Errorf("Missing: %s", item)
@@ -156,6 +165,8 @@ func (m *fakeNodesTable) Open(item string) (ReadSeekCloser, error) {
 }
 
 func (m *fakeNodesTable) Remove(name string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	if _, ok := m.entries[name]; !ok {
 		return os.ErrNotExist
 	}
@@ -178,7 +189,7 @@ func TestFakeNodesTable(t *testing.T) {
 	t.Parallel()
 	tb := subcommandstest.MakeTB(t)
 	cas := &fakeCasTable{make(map[string][]byte), false, tb}
-	nodes := &fakeNodesTable{make(map[string][]byte), cas, tb}
+	nodes := &fakeNodesTable{entries: make(map[string][]byte), cas: cas, t: tb}
 	testNodesTableImpl(tb, cas, nodes)
 }
 

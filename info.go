@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"sort"
 
 	"github.com/maruel/subcommands"
 )
@@ -37,7 +38,13 @@ func printEntry(out io.Writer, entry *Entry, relPath string) (count int) {
 		fmt.Fprintf(out, " %s(%d)\n", relPath, entry.Size)
 		count += 1
 	}
-	for name, child := range entry.Files {
+	names := make([]string, 0, len(entry.Files))
+	for name := range entry.Files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		child := entry.Files[name]
 		c := printEntry(out, child, filepath.Join(relPath, name))
 		count += c
 	}

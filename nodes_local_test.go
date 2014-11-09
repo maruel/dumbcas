@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/maruel/subcommands/subcommandstest"
+	"github.com/maruel/ut"
 )
 
 func TestNodesTable(t *testing.T) {
@@ -24,7 +25,7 @@ func TestNodesTable(t *testing.T) {
 	// Explicitely use a fake in-memory CasTable.
 	cas := &fakeCasTable{make(map[string][]byte), false, tb}
 	nodes, err := loadLocalNodesTable(tempData, cas, tb.GetLog())
-	tb.Assertf(err == nil, "Unexpected error: %s", err)
+	ut.AssertEqual(t, nil, err)
 
 	testNodesTableImpl(tb, cas, nodes)
 }

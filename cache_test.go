@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/maruel/subcommands/subcommandstest"
+	"github.com/maruel/ut"
 )
 
 // A working Cache implementation that is very simple and keeps everything in
@@ -30,12 +31,12 @@ type fakeCache struct {
 }
 
 func (c *fakeCache) Root() *EntryCache {
-	c.Assertf(c.closed == false, "Was unexpectedly closed")
+	ut.AssertEqualf(c, c.closed, false, "Was unexpectedly closed")
 	return c.root
 }
 
 func (c *fakeCache) Close() {
-	c.Assertf(c.closed == false, "Was unexpectedly closed")
+	ut.AssertEqualf(c, c.closed, false, "Was unexpectedly closed")
 	c.closed = false
 }
 
@@ -44,7 +45,7 @@ func (a *DumbcasAppMock) LoadCache() (Cache, error) {
 	if a.cache == nil {
 		a.cache = &fakeCache{a.TB, &EntryCache{}, false, debug.Stack()}
 	} else {
-		a.Assertf(a.cache.closed == true, "Was not closed properly; %s", a.cache.creation)
+		ut.AssertEqualf(a.TB, true, a.cache.closed, "Was not closed properly; %s", a.cache.creation)
 		a.cache.closed = false
 	}
 	return a.cache, nil
@@ -55,17 +56,16 @@ func TestCacheNormal(t *testing.T) {
 	t.Parallel()
 	tb := subcommandstest.MakeTB(t)
 	cache, err := loadCache(tb.GetLog())
-	tb.Assertf(err == nil, "Oops")
+	ut.AssertEqual(t, nil, err)
 	defer cache.Close()
-	tb.Assertf(cache.Root() != nil, "Oops")
+	ut.AssertEqual(t, false, nil == cache.Root())
 }
 
 func TestCachePath(t *testing.T) {
 	t.Parallel()
-	tb := subcommandstest.MakeTB(t)
 	p, err := getCachePath()
-	tb.Assertf(err == nil, "Oops")
-	tb.Assertf(filepath.IsAbs(p), "Oops")
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, true, filepath.IsAbs(p))
 }
 
 func TestCacheRedirected(t *testing.T) {
@@ -94,7 +94,7 @@ func testCacheImpl(t *subcommandstest.TB, load func() (Cache, error)) {
 	now := time.Now().UTC().Unix()
 	{
 		c, err := load()
-		t.Assertf(err == nil, "Failed to create cache", err)
+		ut.AssertEqual(t, nil, err)
 		if c.Root().CountMembers() != 1 {
 			c.Root().Print(os.Stderr, "")
 			t.Fatalf("Oops: %d", c.Root().CountMembers())
@@ -112,14 +112,14 @@ func testCacheImpl(t *subcommandstest.TB, load func() (Cache, error)) {
 	}
 	{
 		c, err := load()
-		t.Assertf(err == nil, "Failed to create cache", err)
+		ut.AssertEqual(t, nil, err)
 		b := &bytes.Buffer{}
 		c.Root().Print(b, "")
-		t.Assertf(b.String() == "- 'foo'\n  - 'bar'\n    Sha1: x\n    Size: 1\n", "Unexpected: %s", b.String())
+		ut.AssertEqual(t, "- 'foo'\n  - 'bar'\n    Sha1: x\n    Size: 1\n", b.String())
 		foo := c.Root().Files["foo"]
 		bar := foo.Files["bar"]
 		if bar.Sha1 != "x" || bar.Size != 1 || bar.Timestamp != 2 || bar.LastTested != now {
-			t.Assertf(false, "Oops: %d", c.Root().CountMembers())
+			t.Fatalf("Oops: %d", c.Root().CountMembers())
 		}
 		c.Close()
 	}

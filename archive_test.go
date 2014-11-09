@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+
+	"github.com/maruel/ut"
 )
 
 func TestArchive(t *testing.T) {
@@ -50,8 +52,8 @@ func TestArchive(t *testing.T) {
 	}
 	expected = append(expected, sha1Bytes(entries))
 	sort.Strings(expected)
-	f.Assertf(Equals(items, expected), "Unexpected items:\n%s\n%s", items, expected)
+	ut.AssertEqual(t, items, expected)
 
 	nodes := EnumerateNodesAsList(f.TB, f.nodes)
-	f.Assertf(len(nodes) == 2, "Unexpected nodes: %s", nodes)
+	ut.AssertEqual(t, len(nodes), 2)
 }

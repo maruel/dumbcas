@@ -19,12 +19,13 @@ import (
 	"path/filepath"
 
 	"github.com/maruel/subcommands/subcommandstest"
+	"github.com/maruel/ut"
 )
 
 // makeTempDir creates a temporary directory.
 func makeTempDir(t *subcommandstest.TB, name string) string {
 	name, err := ioutil.TempDir("", "dumbcas_"+name)
-	t.Assertf(err == nil, "Internal error")
+	ut.AssertEqual(t, nil, err)
 	return name
 }
 

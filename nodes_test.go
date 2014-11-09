@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/maruel/subcommands/subcommandstest"
+	"github.com/maruel/ut"
 )
 
 // A working NodesTable implementation that keeps data in memory.
@@ -178,7 +179,7 @@ func (m *fakeNodesTable) Remove(name string) error {
 func EnumerateNodesAsList(t *subcommandstest.TB, nodes NodesTable) []string {
 	items := []string{}
 	for v := range nodes.Enumerate() {
-		t.Assertf(v.Error == nil, "Unexpected failure")
+		ut.AssertEqual(t, nil, v.Error)
 		items = append(items, v.Item)
 	}
 	sort.Strings(items)
@@ -195,16 +196,16 @@ func TestFakeNodesTable(t *testing.T) {
 
 func request(t *subcommandstest.TB, nodes NodesTable, path string, expectedCode int, expectedBody string) string {
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBufferString("GET " + path + " HTTP/1.1\r\nHost: test\r\n\r\n")))
-	t.Assertf(err == nil, "%s: %s", path, err)
+	ut.AssertEqual(t, nil, err)
 
 	resp := httptest.NewRecorder()
 	nodes.ServeHTTP(resp, req)
 	bytes, err := ioutil.ReadAll(resp.Body)
-	t.Assertf(err == nil, "%s: %s", path, err)
+	ut.AssertEqual(t, nil, err)
 
 	body := string(bytes)
-	t.Assertf(resp.Code == expectedCode, "%s: %d != %d\n%s", path, expectedCode, resp.Code, body)
-	t.Assertf(expectedBody == "" || body == expectedBody, "%s: %#s != %#s", path, expectedBody, body)
+	ut.AssertEqual(t, expectedCode, resp.Code)
+	ut.AssertEqualf(t, true, expectedBody == "" || body == expectedBody, "%s: %#s != %#s", path, expectedBody, body)
 	return body
 }
 
@@ -237,7 +238,7 @@ func marshalData(t *subcommandstest.TB, tree map[string]string) (map[string]stri
 
 	// Then process entries itself.
 	data, err := json.Marshal(entries)
-	t.Assertf(err == nil, "Failed to json marshal: %s", err)
+	ut.AssertEqual(t, nil, err)
 	return sha1tree, data
 }
 
@@ -248,21 +249,21 @@ func archiveData(t *subcommandstest.TB, cas CasTable, nodes NodesTable, tree map
 	sha1tree, entries := marshalData(t, tree)
 	for k, v := range tree {
 		err := cas.AddEntry(bytes.NewBuffer([]byte(v)), sha1tree[k])
-		t.Assertf(err == nil || err == os.ErrExist, "Unexpected error: %s", err)
+		ut.AssertEqualf(t, true, err == nil || err == os.ErrExist, "Unexpected error: %s", err)
 	}
 	entrySha1, err := AddBytes(cas, entries)
-	t.Assertf(err == nil, "Adding to cas failed: %s", err)
+	ut.AssertEqual(t, nil, err)
 
 	// And finally add the node.
 	now := time.Now().UTC()
 	nodeName, err := nodes.AddEntry(&Node{entrySha1, "useful comment"}, "fictious")
-	t.Assertf(err == nil, "Failed to add node: %s", err)
-	t.Assertf(strings.HasPrefix(nodeName, now.Format("2006-01")+string(filepath.Separator)), "Invalid node name %s", nodeName)
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqualf(t, true, strings.HasPrefix(nodeName, now.Format("2006-01")+string(filepath.Separator)), "Invalid node name %s", nodeName)
 	return sha1tree, nodeName, entrySha1
 }
 
 func testNodesTableImpl(t *subcommandstest.TB, cas CasTable, nodes NodesTable) {
-	t.Assertf(len(EnumerateNodesAsList(t, nodes)) == 0, "Found unexpected value")
+	ut.AssertEqual(t, []string{}, EnumerateNodesAsList(t, nodes))
 
 	tree1 := map[string]string{
 		"file1":           "content1",
@@ -270,11 +271,11 @@ func testNodesTableImpl(t *subcommandstest.TB, cas CasTable, nodes NodesTable) {
 	}
 	archiveData(t, cas, nodes, tree1)
 	items := EnumerateNodesAsList(t, nodes)
-	t.Assertf(len(items) == 2, "Found items: %q", items)
+	ut.AssertEqual(t, 2, len(items))
 	name := strings.Replace(items[0], string(filepath.Separator), "/", -1)
 
 	body := request(t, nodes, "/", 200, "")
-	t.Assertf(strings.Count(body, "<a ") == 2, "Unexpected output:\n%s", body)
+	ut.AssertEqual(t, 2, strings.Count(body, "<a "))
 	request(t, nodes, "/foo", 404, "")
 	request(t, nodes, "/foo/", 404, "")
 	request(t, nodes, "/"+name, 301, "")

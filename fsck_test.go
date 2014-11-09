@@ -11,6 +11,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/maruel/ut"
 )
 
 func TestFsckEmpty(t *testing.T) {
@@ -19,9 +21,9 @@ func TestFsckEmpty(t *testing.T) {
 	args := []string{"fsck", "-root=\\test_fsck_empty"}
 	f.Run(args, 0)
 	items := EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(items) == 0, "Unexpected items: %s", items)
+	ut.AssertEqual(t, []string{}, items)
 	nodes := EnumerateNodesAsList(f.TB, f.nodes)
-	f.Assertf(len(nodes) == 0, "Unexpected nodes: %q", nodes)
+	ut.AssertEqual(t, []string{}, nodes)
 }
 
 func TestFsckCorruptCasFile(t *testing.T) {
@@ -43,13 +45,13 @@ func TestFsckCorruptCasFile(t *testing.T) {
 	// One entry disapeared. I hope you had a valid secondary copy of your
 	// CasTable.
 	i1 := EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(i1) == 2, "Unexpected items: %d", len(i1))
+	ut.AssertEqual(t, 2, len(i1))
 
 	// Note: The node is not quarantined, because in theory the data could be
 	// found on another copy of the CasTable so it's preferable to not delete the
 	// node.
 	n1 := EnumerateNodesAsList(f.TB, f.nodes)
-	f.Assertf(len(n1) == 2, "Unexpected nodes: %q", n1)
+	ut.AssertEqual(t, 2, len(n1))
 }
 
 func TestFsckCorruptNodeEntry(t *testing.T) {
@@ -70,7 +72,7 @@ func TestFsckCorruptNodeEntry(t *testing.T) {
 	f.Run(args, 0)
 
 	i1 := EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(i1) == 3, "Unexpected items: %d", len(i1))
+	ut.AssertEqual(t, 3, len(i1))
 	n1 := EnumerateNodesAsList(f.TB, f.nodes)
-	f.Assertf(len(n1) == 1, "Unexpected nodes: %q", n1)
+	ut.AssertEqual(t, 1, len(n1))
 }

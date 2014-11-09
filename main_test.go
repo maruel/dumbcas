@@ -14,6 +14,7 @@ import (
 
 	"github.com/maruel/subcommands"
 	"github.com/maruel/subcommands/subcommandstest"
+	"github.com/maruel/ut"
 )
 
 func init() {
@@ -32,7 +33,7 @@ type DumbcasAppMock struct {
 func (a *DumbcasAppMock) Run(args []string, expected int) {
 	a.GetLog().Printf("%s", args)
 	returncode := subcommands.Run(a, args)
-	a.Assertf(returncode == expected, "Unexpected return code %d", returncode)
+	ut.AssertEqual(a, expected, returncode)
 }
 
 func makeDumbcasAppMock(t *testing.T) *DumbcasAppMock {
@@ -44,6 +45,6 @@ func TestMainHelp(t *testing.T) {
 	a := subcommandstest.MakeAppMock(t, application)
 	args := []string{"help"}
 	r := subcommands.Run(a, args)
-	a.Assertf(r == 0, "Unexpected return code %d", r)
+	ut.AssertEqual(t, 0, r)
 	a.CheckBuffer(true, false)
 }

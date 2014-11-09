@@ -14,11 +14,11 @@ import (
 	"testing"
 
 	"github.com/maruel/subcommands/subcommandstest"
+	"github.com/maruel/ut"
 )
 
 func TestPrefixSpace(t *testing.T) {
 	t.Parallel()
-	tb := subcommandstest.MakeTB(t)
 	type S struct {
 		i int
 		s string
@@ -32,10 +32,10 @@ func TestPrefixSpace(t *testing.T) {
 	}
 	for prefixLength, s := range checks {
 		x := prefixSpace(uint(prefixLength))
-		tb.Assertf(x == s.i, "%d: %d != %d", prefixLength, x, s.i)
+		ut.AssertEqualIndex(t, prefixLength, x, s.i)
 		if x != 0 {
 			res := fmt.Sprintf("%0*x", prefixLength, x-1)
-			tb.Assertf(res == s.s, "%d: %s != %s", prefixLength, res, s.s)
+			ut.AssertEqualIndex(t, prefixLength, res, s.s)
 		}
 	}
 }
@@ -47,6 +47,6 @@ func TestCasTableImpl(t *testing.T) {
 	defer removeTempDir(tempData)
 
 	cas, err := makeLocalCasTable(tempData)
-	tb.Assertf(err == nil, "Unexpected error: %s", err)
+	ut.AssertEqual(t, nil, err)
 	testCasTableImpl(tb, cas)
 }

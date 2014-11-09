@@ -22,6 +22,7 @@ import (
 
 	"github.com/maruel/subcommands"
 	"github.com/maruel/subcommands/subcommandstest"
+	"github.com/maruel/ut"
 )
 
 // Starts the web server in a separate threads and looks for expected results.
@@ -40,7 +41,7 @@ func makeWebDumbcasAppMock(t *testing.T) *WebDumbcasAppMock {
 }
 
 func (f *WebDumbcasAppMock) goWeb() {
-	f.Assertf(f.socket == nil, "Socket is empty")
+	ut.AssertEqual(f, nil, f.socket)
 	cmd := subcommands.FindCommand(f, "web")
 	r := cmd.CommandRun().(*webRun)
 	r.Root = "\\foo"
@@ -69,34 +70,34 @@ func (f *WebDumbcasAppMock) closeWeb() {
 
 func (f *WebDumbcasAppMock) get(url string, expectedUrl string) *http.Response {
 	r, err := http.Get(f.baseUrl + url)
-	f.Assertf(err == nil, "Oops: %s", err)
-	f.Assertf(expectedUrl == "" || r.Request.URL.Path == expectedUrl, "%s != %s", expectedUrl, r.Request.URL.Path)
+	ut.AssertEqual(f, nil, err)
+	ut.AssertEqualf(f, true, expectedUrl == "" || r.Request.URL.Path == expectedUrl, "%s != %s", expectedUrl, r.Request.URL.Path)
 	return r
 }
 
 func (f *WebDumbcasAppMock) get404(url string) {
 	r, err := http.Get(f.baseUrl + url)
-	f.Assertf(err == nil, "Oops: %s", err)
-	f.Assertf(r.StatusCode == 404, "Expected 404, got %d. %s", r.StatusCode, r.Body)
+	ut.AssertEqual(f, nil, err)
+	ut.AssertEqual(f, 404, r.StatusCode)
 }
 
 func readBody(t *subcommandstest.TB, r *http.Response) string {
 	bytes, err := ioutil.ReadAll(r.Body)
-	t.Assertf(err == nil, "Oops: %s", err)
+	ut.AssertEqual(t, nil, err)
 	r.Body.Close()
 	return string(bytes)
 }
 
 func expectedBody(t *subcommandstest.TB, r *http.Response, expected string) {
 	actual := readBody(t, r)
-	t.Assertf(actual == expected, "%v != %v", expected, actual)
+	ut.AssertEqual(t, expected, actual)
 }
 
 func TestWeb(t *testing.T) {
 	t.Parallel()
 	f := makeWebDumbcasAppMock(t)
 	cmd := subcommands.FindCommand(f, "web")
-	f.Assertf(cmd != nil, "Failed to find 'web'")
+	ut.AssertEqual(t, true, cmd != nil)
 	run := cmd.CommandRun().(*webRun)
 	// Sets -root to an invalid non-empty string.
 	run.Root = "\\test_web"
@@ -126,8 +127,8 @@ func TestWeb(t *testing.T) {
 	actual := readBody(f.TB, r)
 	re := regexp.MustCompile("\\\"(.*)\\\"")
 	nodeItems := re.FindStringSubmatch(actual)
-	f.Assertf(len(nodeItems) == 2, "%s", actual)
-	f.Assertf(month+"/"+nodeItems[1] == nodeName, "Unexpected grep: %s", nodeName)
+	ut.AssertEqual(t, 2, len(nodeItems))
+	ut.AssertEqual(t, nodeName, month+"/"+nodeItems[1])
 
 	f.GetLog().Print("T: Get the node.")
 	r = f.get("/content/retrieve/nodes/"+nodeName, "/content/retrieve/nodes/"+nodeName+"/")

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/maruel/subcommands/subcommandstest"
+	"github.com/maruel/ut"
 )
 
 // A working CasTable implementation that keeps all the data in memory.
@@ -118,9 +119,9 @@ func (b Buffer) Close() error {
 func EnumerateCasAsList(t *subcommandstest.TB, cas CasTable) []string {
 	items := []string{}
 	for v := range cas.Enumerate() {
-		t.Assertf(v.Error == nil, "Unexpected failure")
+		ut.AssertEqual(t, nil, v.Error)
 		// Hardcoded for sha1.
-		t.Assertf(len(v.Item) == 40, "Unexpected sha1 entry %s", v.Item)
+		ut.AssertEqual(t, 40, len(v.Item))
 		items = append(items, v.Item)
 	}
 	sort.Strings(items)
@@ -136,43 +137,43 @@ func TestFakeCasTable(t *testing.T) {
 
 func testCasTableImpl(t *subcommandstest.TB, cas CasTable) {
 	items := EnumerateCasAsList(t, cas)
-	t.Assertf(len(items) == 0, "Found unexpected values: %q", items)
+	ut.AssertEqual(t, 0, len(items))
 
 	file1, err := AddBytes(cas, []byte("content1"))
-	t.Assertf(err == nil, "Unexpected error: %s", err)
+	ut.AssertEqual(t, nil, err)
 
 	items = EnumerateCasAsList(t, cas)
-	t.Assertf(Equals(items, []string{file1}), "Found unexpected values: %q != %s", items, file1)
+	ut.AssertEqual(t, []string{file1}, items)
 
 	// Add the same content.
 	file2, err := AddBytes(cas, []byte("content1"))
-	t.Assertf(os.IsExist(err), "Unexpected error: %s", err)
-	t.Assertf(file1 == file2, "Hash mismatch %s != %s", file1, file2)
+	ut.AssertEqualf(t, true, os.IsExist(err), "Unexpected error: %s", err)
+	ut.AssertEqual(t, file1, file2)
 
 	items = EnumerateCasAsList(t, cas)
-	t.Assertf(Equals(items, []string{file1}), "Found unexpected values: %q != %s", items, file1)
+	ut.AssertEqual(t, []string{file1}, items)
 
 	f, err := cas.Open(file1)
-	t.Assertf(err == nil, "Unexpected error: %s", err)
+	ut.AssertEqual(t, nil, err)
 
 	data, err := ioutil.ReadAll(f)
 	f.Close()
-	t.Assertf(err == nil, "Unexpected error: %s", err)
-	t.Assertf(string(data) == "content1", "Unexpected value: %s", data)
+	ut.AssertEqual(t, nil, err)
+	ut.AssertEqual(t, "content1", string(data))
 
 	_, err = cas.Open("0")
-	t.Assertf(err != nil, "Unexpected success")
+	ut.AssertEqual(t, false, err == nil)
 
 	err = cas.Remove(file1)
-	t.Assertf(err == nil, "Unexpected error: %s", err)
+	ut.AssertEqual(t, nil, err)
 
 	err = cas.Remove(file1)
-	t.Assertf(err != nil, "Unexpected success")
+	ut.AssertEqual(t, false, err == nil)
 
 	// Test fsck bit.
-	t.Assertf(!cas.GetFsckBit(), "Unexpected fsck bit is set")
+	ut.AssertEqual(t, false, cas.GetFsckBit())
 	cas.SetFsckBit()
-	t.Assertf(cas.GetFsckBit(), "Unexpected fsck bit is unset")
+	ut.AssertEqual(t, true, cas.GetFsckBit())
 	cas.ClearFsckBit()
-	t.Assertf(!cas.GetFsckBit(), "Unexpected fsck bit is set")
+	ut.AssertEqual(t, false, cas.GetFsckBit())
 }

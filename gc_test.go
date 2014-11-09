@@ -12,6 +12,8 @@ package main
 import (
 	"sort"
 	"testing"
+
+	"github.com/maruel/ut"
 )
 
 func TestGcEmpty(t *testing.T) {
@@ -20,7 +22,7 @@ func TestGcEmpty(t *testing.T) {
 	args := []string{"gc", "-root=\\test_gc_empty"}
 	f.Run(args, 0)
 	i := EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(i) == 0, "Unexpected items: %s", i)
+	ut.AssertEqual(t, []string{}, i)
 }
 
 func TestGcKept(t *testing.T) {
@@ -36,17 +38,17 @@ func TestGcKept(t *testing.T) {
 	})
 
 	i1 := EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(i1) == 3, "Unexpected items: %d", len(i1))
+	ut.AssertEqual(t, 3, len(i1))
 	n1 := EnumerateNodesAsList(f.TB, f.nodes)
-	f.Assertf(len(n1) == 2, "Unexpected nodes: %q", n1)
+	ut.AssertEqual(t, 2, len(n1))
 
 	f.Run(args, 0)
 
 	// Nothing disapeared.
 	i2 := EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(Equals(i1, i2), "Unexpected items: %d", i2)
+	ut.AssertEqual(t, i1, i2)
 	n2 := EnumerateNodesAsList(f.TB, f.nodes)
-	f.Assertf(Equals(n1, n2), "Unexpected nodes: %q", n2)
+	ut.AssertEqual(t, n1, n2)
 }
 
 func TestGcTrim(t *testing.T) {
@@ -72,24 +74,24 @@ func TestGcTrim(t *testing.T) {
 	})
 
 	i2 := EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(i2) == 7, "Unexpected items: %d", len(i2))
+	ut.AssertEqual(t, 7, len(i2))
 	n2 := EnumerateNodesAsList(f.TB, f.nodes)
-	f.Assertf(len(n2) == 3, "Unexpected items: %q", n2)
+	ut.AssertEqual(t, 3, len(n2))
 
 	// Remove the first node and gc.
 	err := f.nodes.Remove(n1[0])
-	f.Assertf(err == nil, "Unexpected: %s", err)
+	ut.AssertEqual(t, nil, err)
 	f.Run(args, 0)
 	i3 := EnumerateCasAsList(f.TB, f.cas)
-	f.Assertf(len(i3) == 5, "Unexpected items: %d", len(i3))
+	ut.AssertEqual(t, 5, len(i3))
 	n3 := EnumerateNodesAsList(f.TB, f.nodes)
-	f.Assertf(len(n3) == 2, "Unexpected items: %q", n3)
+	ut.AssertEqual(t, 2, len(n3))
 
 	// Check both: "n3 == n2 - n1[0]" and "i3 == i2 - i1 + sha1(content1)"
 	rest := Sub(n2, []string{n1[0]})
-	f.Assertf(Equals(n3, rest), "Unexpected difference: %q != %q", n3, rest)
+	ut.AssertEqual(t, n3, rest)
 	rest = Sub(i2, i1)
 	rest = append(rest, sha1String("content1"))
 	sort.Strings(rest)
-	f.Assertf(Equals(i3, rest), "Unexpected difference: %q != %q", i3, rest)
+	ut.AssertEqual(t, i3, rest)
 }

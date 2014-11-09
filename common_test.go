@@ -10,49 +10,22 @@ limitations under the License. */
 package main
 
 import (
-	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/big"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/maruel/subcommands/subcommandstest"
 )
 
-func GetRandRune() rune {
-	chars := "0123456789abcdefghijklmnopqrstuvwxyz"
-	lengthBig := big.NewInt(int64(len(chars)))
-	val, err := rand.Int(rand.Reader, lengthBig)
-	if err != nil {
-		panic("Rand failed")
-	}
-	return rune(chars[int(val.Int64())])
-}
-
-// Creates a temporary directory.
+// makeTempDir creates a temporary directory.
 func makeTempDir(t *subcommandstest.TB, name string) string {
-	prefix := "dumbcas_" + name + "_"
-	length := 8
-	tempDir := os.TempDir()
-
-	ranPath := make([]rune, length)
-	for i := 0; i < length; i++ {
-		ranPath[i] = GetRandRune()
-	}
-	tempFull := filepath.Join(tempDir, prefix+string(ranPath))
-	for {
-		err := os.Mkdir(tempFull, 0700)
-		if os.IsExist(err) {
-			// Add another random character.
-			ranPath = append(ranPath, GetRandRune())
-		}
-		return tempFull
-	}
-	t.Assertf(false, "Internal error")
-	return ""
+	name, err := ioutil.TempDir("", "dumbcas_"+name)
+	t.Assertf(err == nil, "Internal error")
+	return name
 }
 
 func removeTempDir(tempDir string) {

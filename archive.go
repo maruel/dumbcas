@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/maruel/interrupt"
 	"github.com/maruel/subcommands"
 )
 
@@ -195,7 +196,7 @@ func (s *Stats) enumerateInputs(inputs []string) <-chan inputItem {
 				cont := true
 				for cont {
 					select {
-					case <-InterruptedChannel:
+					case <-interrupt.Channel:
 						// Early exit.
 						s.interrupted.Add(1)
 						return
@@ -258,7 +259,7 @@ func (s *Stats) hashInputs(a DumbcasApplication, inputs <-chan inputItem) <-chan
 		}()
 		for {
 			select {
-			case <-InterruptedChannel:
+			case <-interrupt.Channel:
 				// Early exit.
 				s.interrupted.Add(1)
 				return
@@ -343,7 +344,7 @@ func (s *Stats) archiveInputs(a DumbcasApplication, cas CasTable, items <-chan i
 		cont := true
 		for cont {
 			select {
-			case <-InterruptedChannel:
+			case <-interrupt.Channel:
 				// Early exit.
 				s.interrupted.Add(1)
 				return
@@ -448,7 +449,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 		select {
 		case line := <-output:
 			a.GetLog().Print(line)
-		case <-InterruptedChannel:
+		case <-interrupt.Channel:
 			// Early exit. Note this as an error.
 			err = fmt.Errorf("Was interrupted.")
 		case item, ok := <-entry:
@@ -506,7 +507,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 	if err == errDone {
 		err = nil
 	}
-	if IsInterrupted() {
+	if interrupt.IsSet() {
 		fmt.Fprintf(a.GetOut(), "Was interrupted, waiting for processes to terminate.\n")
 	}
 	// Make sure all the worker threads are done. They may still be processing in
@@ -539,7 +540,7 @@ func (c *archiveRun) Run(a subcommands.Application, args []string) int {
 		fmt.Fprintf(a.GetErr(), "%s: Must only provide a .toArchive file.\n", a.GetName())
 		return 1
 	}
-	HandleCtrlC()
+	interrupt.HandleCtrlC()
 	d := a.(DumbcasApplication)
 	if err := c.main(d, args[0]); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)

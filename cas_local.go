@@ -19,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"github.com/maruel/interrupt"
 )
 
 const casName = "cas"
@@ -119,7 +121,7 @@ func (c *casTable) Enumerate() <-chan EnumerationEntry {
 			items <- EnumerationEntry{Error: fmt.Errorf("Failed reading ss", c.casDir)}
 		} else {
 			for _, prefix := range prefixes {
-				if IsInterrupted() {
+				if interrupt.IsSet() {
 					break
 				}
 				if prefix == TrashName {

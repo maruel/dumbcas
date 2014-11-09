@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/maruel/interrupt"
 )
 
 // The nodes are stored in a separate directory from the CAS store.
@@ -152,7 +154,7 @@ func (n *nodesTable) Enumerate() <-chan EnumerationEntry {
 	go func() {
 		for {
 			select {
-			case <-InterruptedChannel:
+			case <-interrupt.Channel:
 				close(items)
 				return
 			case v, ok := <-c:

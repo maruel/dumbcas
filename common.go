@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/maruel/interrupt"
 	"github.com/maruel/subcommands"
 )
 
@@ -106,7 +107,7 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) bool {
 		_ = f.Close()
 	}()
 	for {
-		if IsInterrupted() {
+		if interrupt.IsSet() {
 			break
 		}
 		dirs, err := f.Readdir(128)
@@ -118,7 +119,7 @@ func recurseEnumerateTree(rootDir string, c chan<- TreeItem) bool {
 			break
 		}
 		for _, d := range dirs {
-			if IsInterrupted() {
+			if interrupt.IsSet() {
 				break
 			}
 			name := d.Name()

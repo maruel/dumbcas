@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/maruel/interrupt"
 	"github.com/maruel/subcommands"
 )
 
@@ -84,7 +85,7 @@ func (c *infoRun) Run(a subcommands.Application, args []string) int {
 		fmt.Fprintf(a.GetErr(), "%s: Must only provide a <node>.\n", a.GetName())
 		return 1
 	}
-	HandleCtrlC()
+	interrupt.HandleCtrlC()
 	d := a.(DumbcasApplication)
 	if err := c.main(d, args[0]); err != nil {
 		fmt.Fprintf(a.GetErr(), "%s: %s\n", a.GetName(), err)

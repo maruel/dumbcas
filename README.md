@@ -19,6 +19,7 @@ the unit tests are run in parallel with test case locale logs that are printed
 out on test case failure. This was certainly challenging for the implementation
 of the subcommand support.
 
+[![GoDoc](https://godoc.org/github.com/maruel/dumbcas/dumbcaslib?status.svg)](https://godoc.org/github.com/maruel/dumbcas/dumbcaslib)
 [![Build Status](https://travis-ci.org/maruel/dumbcas.svg?branch=master)](https://travis-ci.org/maruel/dumbcas)
 [![Coverage Status](https://img.shields.io/coveralls/maruel/dumbcas.svg)](https://coveralls.io/r/maruel/dumbcas?branch=master)
 

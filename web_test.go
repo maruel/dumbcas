@@ -105,8 +105,8 @@ func TestWeb(t *testing.T) {
 	// Create a tree of stuff. Call the factory functions directly because we
 	// can't use Run(). The reason Run() can't be used is because we need the
 	// channel to get the socket address back.
-	f.DumbcasAppMock.MakeCasTable("")
-	f.DumbcasAppMock.LoadNodesTable("", f.cas)
+	_, _ = f.DumbcasAppMock.MakeCasTable("")
+	_, _ = f.DumbcasAppMock.LoadNodesTable("", f.cas)
 	tree1 := map[string]string{
 		"file1":           "content1",
 		"dir1/dir2/file2": "content2",

@@ -49,9 +49,9 @@ func createTree(rootDir string, tree map[string]string) error {
 		if err != nil {
 			return err
 		}
-		f.WriteString(content)
-		f.Sync()
-		f.Close()
+		_, _ = f.WriteString(content)
+		_ = f.Sync()
+		_ = f.Close()
 	}
 	return nil
 }
@@ -80,7 +80,7 @@ func Sub(a []string, b []string) []string {
 
 func sha1String(content string) string {
 	hash := sha1.New()
-	io.WriteString(hash, content)
+	_, _ = io.WriteString(hash, content)
 	return hex.EncodeToString(hash.Sum(nil))
 }
 

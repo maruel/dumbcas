@@ -18,8 +18,8 @@ func TestInfo(t *testing.T) {
 	f := makeDumbcasAppMock(t)
 	// Force the creation of CAS and NodesTable so content can be archived in
 	// memory before running the command.
-	f.MakeCasTable("")
-	f.LoadNodesTable("", f.cas)
+	_, _ = f.MakeCasTable("")
+	_, _ = f.LoadNodesTable("", f.cas)
 
 	// Create an archive.
 	tree := map[string]string{

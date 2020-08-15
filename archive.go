@@ -535,7 +535,7 @@ func (c *archiveRun) main(a DumbcasApplication, toArchiveArg string) error {
 	return nil
 }
 
-func (c *archiveRun) Run(a subcommands.Application, args []string) int {
+func (c *archiveRun) Run(a subcommands.Application, args []string, _ subcommands.Env) int {
 	if len(args) != 1 {
 		fmt.Fprintf(a.GetErr(), "%s: Must only provide a .toArchive file.\n", a.GetName())
 		return 1

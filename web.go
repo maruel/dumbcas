@@ -130,7 +130,7 @@ func (c *webRun) main(d DumbcasApplication, ready chan<- net.Listener) error {
 	return s.Serve(ls)
 }
 
-func (c *webRun) Run(a subcommands.Application, args []string) int {
+func (c *webRun) Run(a subcommands.Application, args []string, _ subcommands.Env) int {
 	if len(args) != 0 {
 		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1

@@ -114,7 +114,7 @@ func (c *casTable) Enumerate() <-chan EnumerationEntry {
 	go func() {
 		prefixes, err := readDirNames(c.casDir)
 		if err != nil {
-			items <- EnumerationEntry{Error: fmt.Errorf("Failed reading ss", c.casDir)}
+			items <- EnumerationEntry{Error: fmt.Errorf("Failed reading %s", c.casDir)}
 		} else {
 			for _, prefix := range prefixes {
 				if interrupt.IsSet() {

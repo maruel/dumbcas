@@ -116,7 +116,7 @@ func (c *restoreRun) main(a DumbcasApplication, nodeArg string) error {
 	return err
 }
 
-func (c *restoreRun) Run(a subcommands.Application, args []string) int {
+func (c *restoreRun) Run(a subcommands.Application, args []string, _ subcommands.Env) int {
 	if len(args) != 1 {
 		fmt.Fprintf(a.GetErr(), "%s: Must only provide a <node>.\n", a.GetName())
 		return 1

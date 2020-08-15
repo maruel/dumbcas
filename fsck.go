@@ -114,7 +114,7 @@ func (c *fsckRun) main(a DumbcasApplication) error {
 	return nil
 }
 
-func (c *fsckRun) Run(a subcommands.Application, args []string) int {
+func (c *fsckRun) Run(a subcommands.Application, args []string, _ subcommands.Env) int {
 	if len(args) != 0 {
 		fmt.Fprintf(a.GetErr(), "%s: Unsupported arguments.\n", a.GetName())
 		return 1
